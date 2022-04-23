@@ -1,2 +1,2 @@
-# go-xpayments
-Official Go implementation of the xPayments protocol.
+# Go xPayments
+Official Golang implementation of the xPayments protocol.
