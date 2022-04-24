@@ -1171,9 +1171,9 @@ func setXpserbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *xpsconfig.Config
 			if err != nil {
 				Fatalf("Invalid miner xpserbase: %v", err)
 			}
-			cfg.Miner.Xpserbase = account.Address
+			cfg.Miner.Xpsbase = account.Address
 		} else {
-			Fatalf("No xpserbase configured")
+			Fatalf("No xpsbase configured")
 		}
 	}
 }
@@ -1731,9 +1731,9 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 			// when we're definitely concerned with only one account.
 			passphrase = list[0]
 		}
-		// setXpserbase has been called above, configuring the miner address from command line flags.
-		if cfg.Miner.Xpserbase != (common.Address{}) {
-			developer = accounts.Account{Address: cfg.Miner.Xpserbase}
+		// setXpsbase has been called above, configuring the miner address from command line flags.
+		if cfg.Miner.Xpsbase != (common.Address{}) {
+			developer = accounts.Account{Address: cfg.Miner.Xpsbase}
 		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {

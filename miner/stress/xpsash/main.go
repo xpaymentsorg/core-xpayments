@@ -180,7 +180,7 @@ func makeMiner(genesis *core.Genesis) (*node.Node, *xps.xPayments, error) {
 		GPO:             xpsconfig.Defaults.GPO,
 		Xpsash:          xpsconfig.Defaults.Xpsash,
 		Miner: miner.Config{
-			xpsbase:  common.Address{1},
+			Xpsbase:  common.Address{1},
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
 			Recommit: time.Second,

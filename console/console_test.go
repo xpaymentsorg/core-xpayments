@@ -101,7 +101,7 @@ func newTester(t *testing.T, confOverride func(*xpsconfig.Config)) *tester {
 	xpsConf := &xpsconfig.Config{
 		Genesis: core.DeveloperGenesisBlock(15, 11_500_000, common.Address{}),
 		Miner: miner.Config{
-			Xpserbase: common.HexToAddress(testAddress),
+			Xpsbase: common.HexToAddress(testAddress),
 		},
 		Xpsash: xpsash.Config{
 			PowMode: xpsash.ModeTest,

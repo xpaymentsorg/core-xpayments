@@ -3574,7 +3574,7 @@ func TestEIP1559Transition(t *testing.T) {
 		key2, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		addr2   = crypto.PubkeyToAddress(key2.PublicKey)
-		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Xpser))
+		funds   = new(big.Int).Mul(common.Big1, big.NewInt(params.Xps))
 		gspec   = &Genesis{
 			Config: params.AllXpsashProtocolChanges,
 			Alloc: GenesisAlloc{

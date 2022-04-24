@@ -502,7 +502,7 @@ func makeFullNode(genesis *core.Genesis) (*node.Node, *xps.xPayments, *xpscataly
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	_, err = lxs.NewLesServer(stack, xpsBackend, econfig)
+	_, err = lxs.NewLxsServer(stack, xpsBackend, econfig)
 	if err != nil {
 		log.Crit("Failed to create the LXS server", "err", err)
 	}
