@@ -14,4 +14,4 @@ Official Bor Repository: https://github.com/maticnetwork/bor
 ![contributors](https://img.shields.io/github/contributors-anon/xpaymentsorg/go-xpayments) 
 ![size](https://img.shields.io/github/languages/code-size/xpaymentsorg/go-xpayments) 
 ![lines](https://img.shields.io/tokei/lines/github/xpaymentsorg/go-xpayments)
-[![Twitter Follow](https://img.shields.io/twitter/follow/xPayments.svg?style=social)](https://twitter.com/xpaymentsorg)
+[![Twitter Follow](https://img.shields.io/twitter/follow/xPaymentsOrg.svg?style=social)](https://twitter.com/xpaymentsorg)
