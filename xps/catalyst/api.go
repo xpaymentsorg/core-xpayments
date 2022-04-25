@@ -154,7 +154,7 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(update beacon.ForkchoiceStateV1, pa
 		if merger := api.xps.Merger(); !merger.PoSFinalized() {
 			merger.FinalizePoS()
 		}
-		// TODO (MariusVanDerWijden): If the finalized block is not in our canonical tree, somethings wrong
+		// TODO (MariusVanDerWijden): If the finalized block is not in our canonical tree, somxpsings wrong
 		finalBlock := api.xps.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
 		if finalBlock == nil {
 			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)

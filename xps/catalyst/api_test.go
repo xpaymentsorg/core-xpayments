@@ -121,7 +121,7 @@ func TestXps2AssembleBlockWithAnotherBlocksTxs(t *testing.T) {
 	}
 }
 
-func TestSxpseadBeforeTotalDifficulty(t *testing.T) {
+func TestSetHeadBeforeTotalDifficulty(t *testing.T) {
 	genesis, blocks := generatePreMergeChain(10)
 	n, xpsservice := startXpsService(t, genesis, blocks)
 	defer n.Close()
@@ -256,7 +256,7 @@ func TestXps2NewBlock(t *testing.T) {
 		api    = NewConsensusAPI(xpsservice)
 		parent = preMergeBlocks[len(preMergeBlocks)-1]
 
-		// This XVM code generates a log when the contract is created.
+		// This EVM code generates a log when the contract is created.
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	// The event channels.
@@ -379,7 +379,7 @@ func TestXps2DeepReorg(t *testing.T) {
 			if xpsservice.BlockChain().CurrentBlock().NumberU64() != head {
 				t.Fatalf("Chain head shouldn't be updated")
 			}
-			if err := api.sxpsead(block.Hash()); err != nil {
+			if err := api.setHead(block.Hash()); err != nil {
 				t.Fatalf("Failed to set head: %v", err)
 			}
 			if xpsservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
@@ -425,7 +425,7 @@ func TestFullAPI(t *testing.T) {
 	var (
 		api    = NewConsensusAPI(xpsservice)
 		parent = xpsservice.BlockChain().CurrentBlock()
-		// This XVM code generates a log when the contract is created.
+		// This EVM code generates a log when the contract is created.
 		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
 	)
 	for i := 0; i < 10; i++ {

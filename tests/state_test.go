@@ -231,7 +231,7 @@ func runBenchmark(b *testing.B, t *StateTest) {
 			context := core.NewXVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
 			context.GetHash = vmTestBlockHash
 			context.BaseFee = baseFee
-			XVM := vm.NewXVM(context, txContext, statedb, config, vmconfig)
+			xvm := vm.NewXVM(context, txContext, statedb, config, vmconfig)
 
 			// Create "contract" for sender to cache code analysis.
 			sender := vm.NewContract(vm.AccountRef(msg.From()), vm.AccountRef(msg.From()),
