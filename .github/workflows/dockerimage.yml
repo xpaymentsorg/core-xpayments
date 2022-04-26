@@ -1,4 +1,4 @@
-name: Bor Docker Image CI
+name: xPayments Docker Image CI
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Build the Bor Docker image
+    - name: Build the xPayments Docker image
       env:
         DOCKERHUB: ${{ secrets.DOCKERHUB }}
         DOCKERHUB_KEY: ${{ secrets.DOCKERHUB_KEY }}
@@ -23,7 +23,7 @@ jobs:
         echo "Docker login"
         docker login -u $DOCKERHUB -p $DOCKERHUB_KEY
         echo "running build"
-        docker build -f Dockerfile.classic -t maticnetwork/bor:${GITHUB_REF/refs\/tags\//} .
+        docker build -f Dockerfile.classic -t xpaymentsorg/go-xpayments:${GITHUB_REF/refs\/tags\//} .
         echo "pushing image"
-        docker push maticnetwork/bor:${GITHUB_REF/refs\/tags\//}
+        docker push xpaymentsorg/go-xpayments:${GITHUB_REF/refs\/tags\//}
         echo "DONE!"
