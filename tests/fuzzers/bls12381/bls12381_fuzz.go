@@ -1,4 +1,7 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2022 The go-xpayments Authors
+// This file is part of the go-xpayments library.
+//
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -29,7 +32,7 @@ import (
 	gnark "github.com/consensys/gnark-crypto/ecc/bls12-381"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
-	"github.com/ethereum/go-ethereum/crypto/bls12381"
+	"github.com/xpaymentsorg/go-xpayments/crypto/bls12381"
 )
 
 func FuzzCrossPairing(data []byte) int {

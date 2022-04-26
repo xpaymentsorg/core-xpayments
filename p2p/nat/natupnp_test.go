@@ -1,4 +1,7 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2022 The go-xpayments Authors
+// This file is part of the go-xpayments library.
+//
+// Copyright 2022 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -166,7 +169,7 @@ func TestUPNP_DDWRT(t *testing.T) {
 		if os.Getenv("CI") != "" {
 			t.Fatalf("not discovered")
 		} else {
-			t.Skipf("UPnP not discovered (known issue, see https://github.com/ethereum/go-ethereum/issues/21476)")
+			t.Skipf("UPnP not discovered (known issue, see https://github.com/xpaymentsorg/go-xpayments/issues/21476)")
 		}
 	}
 	upnp, _ := discovered.(*upnp)
