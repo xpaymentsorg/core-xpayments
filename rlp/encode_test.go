@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rlp
 
@@ -27,7 +27,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/common/math"
+	"github.com/ethereum/go-ethereum/common/math"
 )
 
 type testEncoder struct {
@@ -145,8 +145,7 @@ var encTests = []encTest{
 	{val: *big.NewInt(0xFFFFFF), output: "83FFFFFF"},
 
 	// negative ints are not supported
-	{val: big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
-	{val: *big.NewInt(-1), error: "rlp: cannot encode negative big.Int"},
+	{val: big.NewInt(-1), error: "rlp: cannot encode negative *big.Int"},
 
 	// byte arrays
 	{val: [0]byte{}, output: "80"},
@@ -397,21 +396,6 @@ func TestEncode(t *testing.T) {
 
 func TestEncodeToBytes(t *testing.T) {
 	runEncTests(t, EncodeToBytes)
-}
-
-func TestEncodeAppendToBytes(t *testing.T) {
-	buffer := make([]byte, 20)
-	runEncTests(t, func(val interface{}) ([]byte, error) {
-		w := NewEncoderBuffer(nil)
-		defer w.Flush()
-
-		err := Encode(w, val)
-		if err != nil {
-			return nil, err
-		}
-		output := w.AppendToBytes(buffer[:0])
-		return output, nil
-	})
 }
 
 func TestEncodeToReader(t *testing.T) {

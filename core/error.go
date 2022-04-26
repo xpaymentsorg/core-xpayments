@@ -1,25 +1,25 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
 import (
 	"errors"
 
-	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 	errSideChainReceipts = errors.New("side blocks can't be accepted as ancient chain data")
 )
 
-// List of xvm-call-message pre-checking errors. All state transition messages will
+// List of evm-call-message pre-checking errors. All state transition messages will
 // be pre-checked before execution. If any invalidation detected, the corresponding
 // error should be returned which is defined here.
 //
@@ -50,10 +50,6 @@ var (
 	// ErrNonceTooHigh is returned if the nonce of a transaction is higher than the
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
-
-	// ErrNonceMax is returned if the nonce of a transaction sender account has
-	// maximum allowed value and would become invalid if incremented.
-	ErrNonceMax = errors.New("nonce has max value")
 
 	// ErrGasLimitReached is returned by the gas pool if the amount of gas required
 	// by a transaction is higher than what's left in the block.

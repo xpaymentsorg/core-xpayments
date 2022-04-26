@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2020 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package node
 
@@ -24,14 +24,12 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/ethereum/go-ethereum/internal/testlog"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
-	"github.com/xpaymentsorg/go-xpayments/internal/testlog"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
 // TestCorsHandler makes sure CORS are properly handled on the http server.
@@ -148,12 +146,12 @@ func TestWebsocketOrigins(t *testing.T) {
 		srv := createAndStartServer(t, &httpConfig{}, true, &wsConfig{Origins: splitAndTrim(tc.spec)})
 		url := fmt.Sprintf("ws://%v", srv.listenAddr())
 		for _, origin := range tc.expOk {
-			if err := wsRequest(t, url, "Origin", origin); err != nil {
+			if err := wsRequest(t, url, origin); err != nil {
 				t.Errorf("spec '%v', origin '%v': expected ok, got %v", tc.spec, origin, err)
 			}
 		}
 		for _, origin := range tc.expFail {
-			if err := wsRequest(t, url, "Origin", origin); err == nil {
+			if err := wsRequest(t, url, origin); err == nil {
 				t.Errorf("spec '%v', origin '%v': expected not to allow,  got ok", tc.spec, origin)
 			}
 		}
@@ -245,18 +243,13 @@ func createAndStartServer(t *testing.T, conf *httpConfig, ws bool, wsConf *wsCon
 }
 
 // wsRequest attempts to open a WebSocket connection to the given URL.
-func wsRequest(t *testing.T, url string, extraHeaders ...string) error {
+func wsRequest(t *testing.T, url, browserOrigin string) error {
 	t.Helper()
-	//t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
+	t.Logf("checking WebSocket on %s (origin %q)", url, browserOrigin)
 
 	headers := make(http.Header)
-	// Apply extra headers.
-	if len(extraHeaders)%2 != 0 {
-		panic("odd extraHeaders length")
-	}
-	for i := 0; i < len(extraHeaders); i += 2 {
-		key, value := extraHeaders[i], extraHeaders[i+1]
-		headers.Set(key, value)
+	if browserOrigin != "" {
+		headers.Set("Origin", browserOrigin)
 	}
 	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
 	if conn != nil {
@@ -297,80 +290,4 @@ func rpcRequest(t *testing.T, url string, extraHeaders ...string) *http.Response
 		t.Fatal(err)
 	}
 	return resp
-}
-
-type testClaim map[string]interface{}
-
-func (testClaim) Valid() error {
-	return nil
-}
-
-func TestJWT(t *testing.T) {
-	var secret = []byte("secret")
-	issueToken := func(secret []byte, method jwt.SigningMethod, input map[string]interface{}) string {
-		if method == nil {
-			method = jwt.SigningMethodHS256
-		}
-		ss, _ := jwt.NewWithClaims(method, testClaim(input)).SignedString(secret)
-		return ss
-	}
-	expOk := []string{
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 4})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 4})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
-			"iat": time.Now().Unix(),
-			"exp": time.Now().Unix() + 2,
-		})),
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{
-			"iat": time.Now().Unix(),
-			"bar": "baz",
-		})),
-	}
-	expFail := []string{
-		// future
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() + 6})),
-		// stale
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix() - 6})),
-		// wrong algo
-		fmt.Sprintf("Bearer %v", issueToken(secret, jwt.SigningMethodHS512, testClaim{"iat": time.Now().Unix() + 4})),
-		// expired
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix(), "exp": time.Now().Unix()})),
-		// missing mandatory iat
-		fmt.Sprintf("Bearer %v", issueToken(secret, nil, testClaim{})),
-		// wrong secret
-		fmt.Sprintf("Bearer %v", issueToken([]byte("wrong"), nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer %v", issueToken([]byte{}, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer %v", issueToken(nil, nil, testClaim{"iat": time.Now().Unix()})),
-		// Various malformed syntax
-		fmt.Sprintf("%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer  %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("bearer %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer: %v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer:%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer\t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-		fmt.Sprintf("Bearer \t%v", issueToken(secret, nil, testClaim{"iat": time.Now().Unix()})),
-	}
-	srv := createAndStartServer(t, &httpConfig{jwtSecret: []byte("secret")},
-		true, &wsConfig{Origins: []string{"*"}, jwtSecret: []byte("secret")})
-	wsUrl := fmt.Sprintf("ws://%v", srv.listenAddr())
-	htUrl := fmt.Sprintf("http://%v", srv.listenAddr())
-
-	for i, token := range expOk {
-		if err := wsRequest(t, wsUrl, "Authorization", token); err != nil {
-			t.Errorf("test %d-ws, token '%v': expected ok, got %v", i, token, err)
-		}
-		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 200 {
-			t.Errorf("test %d-http, token '%v': expected ok, got %v", i, token, resp.StatusCode)
-		}
-	}
-	for i, token := range expFail {
-		if err := wsRequest(t, wsUrl, "Authorization", token); err == nil {
-			t.Errorf("tc %d-ws, token '%v': expected not to allow,  got ok", i, token)
-		}
-		if resp := rpcRequest(t, htUrl, "Authorization", token); resp.StatusCode != 403 {
-			t.Errorf("tc %d-http, token '%v': expected not to allow,  got %v", i, token, resp.StatusCode)
-		}
-	}
-	srv.stop()
 }

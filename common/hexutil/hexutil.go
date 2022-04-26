@@ -1,22 +1,22 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
 Package hexutil implements hex encoding with 0x prefix.
-This encoding is used by the xPayments RPC API to transport binary data in JSON payloads.
+This encoding is used by the Ethereum RPC API to transport binary data in JSON payloads.
 
 Encoding Rules
 
@@ -176,14 +176,13 @@ func MustDecodeBig(input string) *big.Int {
 }
 
 // EncodeBig encodes bigint as a hex string with 0x prefix.
+// The sign of the integer is ignored.
 func EncodeBig(bigint *big.Int) string {
-	if sign := bigint.Sign(); sign == 0 {
+	nbits := bigint.BitLen()
+	if nbits == 0 {
 		return "0x0"
-	} else if sign > 0 {
-		return "0x" + bigint.Text(16)
-	} else {
-		return "-0x" + bigint.Text(16)[1:]
 	}
+	return fmt.Sprintf("%#x", bigint)
 }
 
 func has0xPrefix(input string) bool {

@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package backends
 
@@ -27,14 +27,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments"
-	"github.com/xpaymentsorg/go-xpayments/accounts/abi"
-	"github.com/xpaymentsorg/go-xpayments/accounts/abi/bind"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestSimulatedBackend(t *testing.T) {
@@ -54,8 +54,8 @@ func TestSimulatedBackend(t *testing.T) {
 	if isPending {
 		t.Fatal("transaction should not be pending")
 	}
-	if err != xpayments.NotFound {
-		t.Fatalf("err should be `xpayments.NotFound` but received %v", err)
+	if err != ethereum.NotFound {
+		t.Fatalf("err should be `ethereum.NotFound` but received %v", err)
 	}
 
 	// generate a transaction and confirm you can retrieve it
@@ -125,12 +125,12 @@ func TestNewSimulatedBackend(t *testing.T) {
 	sim := simTestBackend(testAddr)
 	defer sim.Close()
 
-	if sim.config != params.AllXpsashProtocolChanges {
-		t.Errorf("expected sim config to equal params.AllXpsashProtocolChanges, got %v", sim.config)
+	if sim.config != params.AllEthashProtocolChanges {
+		t.Errorf("expected sim config to equal params.AllEthashProtocolChanges, got %v", sim.config)
 	}
 
-	if sim.blockchain.Config() != params.AllXpsashProtocolChanges {
-		t.Errorf("expected sim blockchain config to equal params.AllXpsashProtocolChanges, got %v", sim.config)
+	if sim.blockchain.Config() != params.AllEthashProtocolChanges {
+		t.Errorf("expected sim blockchain config to equal params.AllEthashProtocolChanges, got %v", sim.config)
 	}
 
 	stateDB, _ := sim.blockchain.State()
@@ -430,7 +430,7 @@ func TestEstimateGas(t *testing.T) {
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 	opts, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Xps)}}, 10000000)
+	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether)}}, 10000000)
 	defer sim.Close()
 
 	parsed, _ := abi.JSON(strings.NewReader(contractAbi))
@@ -439,12 +439,12 @@ func TestEstimateGas(t *testing.T) {
 
 	var cases = []struct {
 		name        string
-		message     xpayments.CallMsg
+		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
 		expectData  interface{}
 	}{
-		{"plain transfer(valid)", xpayments.CallMsg{
+		{"plain transfer(valid)", ethereum.CallMsg{
 			From:     addr,
 			To:       &addr,
 			Gas:      0,
@@ -453,7 +453,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     nil,
 		}, params.TxGas, nil, nil},
 
-		{"plain transfer(invalid)", xpayments.CallMsg{
+		{"plain transfer(invalid)", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -462,7 +462,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     nil,
 		}, 0, errors.New("execution reverted"), nil},
 
-		{"Revert", xpayments.CallMsg{
+		{"Revert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -471,7 +471,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("d8b98391"),
 		}, 0, errors.New("execution reverted: revert reason"), "0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000d72657665727420726561736f6e00000000000000000000000000000000000000"},
 
-		{"PureRevert", xpayments.CallMsg{
+		{"PureRevert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      0,
@@ -480,7 +480,7 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("aa8b1d30"),
 		}, 0, errors.New("execution reverted"), nil},
 
-		{"OOG", xpayments.CallMsg{
+		{"OOG", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -489,16 +489,16 @@ func TestEstimateGas(t *testing.T) {
 			Data:     common.Hex2Bytes("50f6fe34"),
 		}, 0, errors.New("gas required exceeds allowance (100000)"), nil},
 
-		{"Assert", xpayments.CallMsg{
+		{"Assert", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
 			GasPrice: big.NewInt(0),
 			Value:    nil,
 			Data:     common.Hex2Bytes("b9b046f9"),
-		}, 0, errors.New("invalid opcode: INVALID"), nil},
+		}, 0, errors.New("invalid opcode: opcode 0xfe not defined"), nil},
 
-		{"Valid", xpayments.CallMsg{
+		{"Valid", ethereum.CallMsg{
 			From:     addr,
 			To:       &contractAddr,
 			Gas:      100000,
@@ -535,17 +535,17 @@ func TestEstimateGasWithPrice(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Xps*2 + 2e17)}}, 10000000)
+	sim := NewSimulatedBackend(core.GenesisAlloc{addr: {Balance: big.NewInt(params.Ether*2 + 2e17)}}, 10000000)
 	defer sim.Close()
 
 	recipient := common.HexToAddress("deadbeef")
 	var cases = []struct {
 		name        string
-		message     xpayments.CallMsg
+		message     ethereum.CallMsg
 		expect      uint64
 		expectError error
 	}{
-		{"EstimateWithoutPrice", xpayments.CallMsg{
+		{"EstimateWithoutPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
@@ -554,7 +554,7 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:     nil,
 		}, 21000, nil},
 
-		{"EstimateWithPrice", xpayments.CallMsg{
+		{"EstimateWithPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
@@ -563,43 +563,43 @@ func TestEstimateGasWithPrice(t *testing.T) {
 			Data:     nil,
 		}, 21000, nil},
 
-		{"EstimateWithVeryHighPrice", xpayments.CallMsg{
+		{"EstimateWithVeryHighPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
-			GasPrice: big.NewInt(1e14), // gascost = 2.1xpser
-			Value:    big.NewInt(1e17), // the remaining balance for fee is 2.1xpser
+			GasPrice: big.NewInt(1e14), // gascost = 2.1ether
+			Value:    big.NewInt(1e17), // the remaining balance for fee is 2.1ether
 			Data:     nil,
 		}, 21000, nil},
 
-		{"EstimateWithSuperhighPrice", xpayments.CallMsg{
+		{"EstimateWithSuperhighPrice", ethereum.CallMsg{
 			From:     addr,
 			To:       &recipient,
 			Gas:      0,
-			GasPrice: big.NewInt(2e14), // gascost = 4.2xpser
+			GasPrice: big.NewInt(2e14), // gascost = 4.2ether
 			Value:    big.NewInt(100000000000),
 			Data:     nil,
-		}, 21000, errors.New("gas required exceeds allowance (10999)")}, // 10999=(2.2xpser-1000wei)/(2e14)
+		}, 21000, errors.New("gas required exceeds allowance (10999)")}, // 10999=(2.2ether-1000wei)/(2e14)
 
-		{"EstimateEIP1559WithHighFees", xpayments.CallMsg{
+		{"EstimateEIP1559WithHighFees", ethereum.CallMsg{
 			From:      addr,
 			To:        &addr,
 			Gas:       0,
-			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1xpser
+			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
 			GasTipCap: big.NewInt(1),
-			Value:     big.NewInt(1e17), // the remaining balance for fee is 2.1xpser
+			Value:     big.NewInt(1e17), // the remaining balance for fee is 2.1ether
 			Data:      nil,
 		}, params.TxGas, nil},
 
-		{"EstimateEIP1559WithSuperHighFees", xpayments.CallMsg{
+		{"EstimateEIP1559WithSuperHighFees", ethereum.CallMsg{
 			From:      addr,
 			To:        &addr,
 			Gas:       0,
-			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1xpser
+			GasFeeCap: big.NewInt(1e14), // maxgascost = 2.1ether
 			GasTipCap: big.NewInt(1),
-			Value:     big.NewInt(1e17 + 1), // the remaining balance for fee is 2.1xpser
+			Value:     big.NewInt(1e17 + 1), // the remaining balance for fee is 2.1ether
 			Data:      nil,
-		}, params.TxGas, errors.New("gas required exceeds allowance (20999)")}, // 20999=(2.2xpser-0.1xpser-1wei)/(1e14)
+		}, params.TxGas, errors.New("gas required exceeds allowance (20999)")}, // 20999=(2.2ether-0.1ether-1wei)/(1e14)
 	}
 	for i, c := range cases {
 		got, err := sim.EstimateGas(context.Background(), c.message)
@@ -916,8 +916,8 @@ func TestSuggestGasPrice(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not get gas price: %v", err)
 	}
-	if gasPrice.Uint64() != sim.pendingBlock.Header().BaseFee.Uint64() {
-		t.Errorf("gas price was not expected value of %v. actual: %v", sim.pendingBlock.Header().BaseFee.Uint64(), gasPrice.Uint64())
+	if gasPrice.Uint64() != uint64(1) {
+		t.Errorf("gas price was not expected value of 1. actual: %v", gasPrice.Uint64())
 	}
 }
 
@@ -1018,7 +1018,7 @@ func TestPendingAndCallContract(t *testing.T) {
 	}
 
 	// make sure you can call the contract in pending state
-	res, err := sim.PendingCallContract(bgCtx, xpayments.CallMsg{
+	res, err := sim.PendingCallContract(bgCtx, ethereum.CallMsg{
 		From: testAddr,
 		To:   &addr,
 		Data: input,
@@ -1038,7 +1038,7 @@ func TestPendingAndCallContract(t *testing.T) {
 	sim.Commit()
 
 	// make sure you can call the contract
-	res, err = sim.CallContract(bgCtx, xpayments.CallMsg{
+	res, err = sim.CallContract(bgCtx, ethereum.CallMsg{
 		From: testAddr,
 		To:   &addr,
 		Data: input,
@@ -1106,14 +1106,14 @@ func TestCallContractRevert(t *testing.T) {
 
 	call := make([]func([]byte) ([]byte, error), 2)
 	call[0] = func(input []byte) ([]byte, error) {
-		return sim.PendingCallContract(bgCtx, xpayments.CallMsg{
+		return sim.PendingCallContract(bgCtx, ethereum.CallMsg{
 			From: testAddr,
 			To:   &addr,
 			Data: input,
 		})
 	}
 	call[1] = func(input []byte) ([]byte, error) {
-		return sim.CallContract(bgCtx, xpayments.CallMsg{
+		return sim.CallContract(bgCtx, ethereum.CallMsg{
 			From: testAddr,
 			To:   &addr,
 			Data: input,

@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of go-xpayments.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-xpayments is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-xpayments is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-xpayments. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package main
 
@@ -22,24 +22,24 @@ import (
 	"testing"
 
 	"github.com/docker/docker/pkg/reexec"
-	"github.com/xpaymentsorg/go-xpayments/internal/cmdtest"
+	"github.com/ethereum/go-ethereum/internal/cmdtest"
 )
 
-type testXpskey struct {
+type testEthkey struct {
 	*cmdtest.TestCmd
 }
 
-// spawns xpskey with the given command line args.
-func runXpskey(t *testing.T, args ...string) *testXpskey {
-	tt := new(testXpskey)
+// spawns ethkey with the given command line args.
+func runEthkey(t *testing.T, args ...string) *testEthkey {
+	tt := new(testEthkey)
 	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
-	tt.Run("xpskey-test", args...)
+	tt.Run("ethkey-test", args...)
 	return tt
 }
 
 func TestMain(m *testing.M) {
-	// Run the app if we've been exec'd as "xpskey-test" in runXpskey.
-	reexec.Register("xpskey-test", func() {
+	// Run the app if we've been exec'd as "ethkey-test" in runEthkey.
+	reexec.Register("ethkey-test", func() {
 		if err := app.Run(os.Args); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

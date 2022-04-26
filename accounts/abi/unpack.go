@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package abi
 
@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -61,7 +61,7 @@ func ReadInteger(typ Type, b []byte) interface{} {
 	default:
 		// the only case left for integer is int256
 		// big.SetBytes can't tell if a number is negative or positive in itself.
-		// On XVM, if the returned number > max int256, it is negative.
+		// On EVM, if the returned number > max int256, it is negative.
 		// A number is > max int256 if the bit at position 255 is set.
 		ret := new(big.Int).SetBytes(b)
 		if ret.Bit(255) == 1 {
@@ -290,7 +290,7 @@ func tuplePointsTo(index int, output []byte) (start int, err error) {
 	offset := big.NewInt(0).SetBytes(output[index : index+32])
 	outputLen := big.NewInt(int64(len(output)))
 
-	if offset.Cmp(outputLen) > 0 {
+	if offset.Cmp(big.NewInt(int64(len(output)))) > 0 {
 		return 0, fmt.Errorf("abi: cannot marshal in to go slice: offset %v would go over slice boundary (len=%v)", offset, outputLen)
 	}
 	if offset.BitLen() > 63 {

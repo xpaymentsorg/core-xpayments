@@ -1,25 +1,24 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rawdb
 
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -27,12 +26,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/prometheus/tsdb/fileutil"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/metrics"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var (
@@ -67,24 +66,22 @@ const (
 	freezerTableSize = 2 * 1000 * 1000 * 1000
 )
 
-// freezer is a memory mapped append-only database to store immutable chain data
+// freezer is an memory mapped append-only database to store immutable chain data
 // into flat files:
 //
 // - The append only nature ensures that disk writes are minimized.
 // - The memory mapping ensures we can max out system memory for caching without
-//   reserving it for go-xpayments. This would also reduce the memory requirements
-//   of Gpay, and thus also GC overhead.
+//   reserving it for go-ethereum. This would also reduce the memory requirements
+//   of Geth, and thus also GC overhead.
 type freezer struct {
 	// WARNING: The `frozen` field is accessed atomically. On 32 bit platforms, only
 	// 64-bit aligned fields can be atomic. The struct is guaranteed to be so aligned,
 	// so take advantage of that (https://golang.org/pkg/sync/atomic/#pkg-note-BUG).
 	frozen    uint64 // Number of blocks already frozen
-	tail      uint64 // Number of the first stored item in the freezer
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
-	// This lock synchronizes writers and the truncate operation, as well as
-	// the "atomic" (batched) read operations.
-	writeLock  sync.RWMutex
+	// This lock synchronizes writers and the truncate operation.
+	writeLock  sync.Mutex
 	writeBatch *freezerBatch
 
 	readonly     bool
@@ -135,7 +132,7 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 
 	// Create the tables.
 	for name, disableSnappy := range tables {
-		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, disableSnappy, readonly)
+		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, maxTableSize, disableSnappy)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()
@@ -146,15 +143,22 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		freezer.tables[name] = table
 	}
 
-	if freezer.readonly {
-		// In readonly mode only validate, don't truncate.
-		// validate also sets `freezer.frozen`.
-		err = freezer.validate()
-	} else {
-		// Truncate all tables to common length.
-		err = freezer.repair()
+	// Adjust table length for bor-receipt freezer for already synced nodes.
+	//
+	// Since, table only supports sequential data, this will fill empty-data upto current
+	// synced block (till current total header number).
+	//
+	// This way they don't have to sync again from block 0 and still be compatible
+	// for block logs for future blocks. Note that already synced nodes
+	// won't have past block logs. Newly synced node will have all the data.
+	if _, ok := freezer.tables[freezerBorReceiptTable]; ok {
+		if err := freezer.tables[freezerBorReceiptTable].Fill(freezer.tables[freezerHeaderTable].items); err != nil {
+			return nil, err
+		}
 	}
-	if err != nil {
+
+	// Truncate all tables to common length.
+	if err := freezer.repair(); err != nil {
 		for _, table := range freezer.tables {
 			table.Close()
 		}
@@ -211,12 +215,12 @@ func (f *freezer) Ancient(kind string, number uint64) ([]byte, error) {
 	return nil, errUnknownTable
 }
 
-// AncientRange retrieves multiple items in sequence, starting from the index 'start'.
+// ReadAncients retrieves multiple items in sequence, starting from the index 'start'.
 // It will return
 //  - at most 'max' items,
 //  - at least 1 item (even if exceeding the maxByteSize), but will otherwise
 //   return as many items as fit into maxByteSize.
-func (f *freezer) AncientRange(kind string, start, count, maxBytes uint64) ([][]byte, error) {
+func (f *freezer) ReadAncients(kind string, start, count, maxBytes uint64) ([][]byte, error) {
 	if table := f.tables[kind]; table != nil {
 		return table.RetrieveItems(start, count, maxBytes)
 	}
@@ -228,17 +232,12 @@ func (f *freezer) Ancients() (uint64, error) {
 	return atomic.LoadUint64(&f.frozen), nil
 }
 
-// Tail returns the number of first stored item in the freezer.
-func (f *freezer) Tail() (uint64, error) {
-	return atomic.LoadUint64(&f.tail), nil
-}
-
 // AncientSize returns the ancient size of the specified category.
 func (f *freezer) AncientSize(kind string) (uint64, error) {
 	// This needs the write lock to avoid data races on table fields.
 	// Speed doesn't matter here, AncientSize is for debugging.
-	f.writeLock.RLock()
-	defer f.writeLock.RUnlock()
+	f.writeLock.Lock()
+	defer f.writeLock.Unlock()
 
 	if table := f.tables[kind]; table != nil {
 		return table.size()
@@ -246,16 +245,8 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 	return 0, errUnknownTable
 }
 
-// ReadAncients runs the given read operation while ensuring that no writes take place
-// on the underlying freezer.
-func (f *freezer) ReadAncients(fn func(xpsdb.AncientReader) error) (err error) {
-	f.writeLock.RLock()
-	defer f.writeLock.RUnlock()
-	return fn(f)
-}
-
 // ModifyAncients runs the given write operation.
-func (f *freezer) ModifyAncients(fn func(xpsdb.AncientWriteOp) error) (writeSize int64, err error) {
+func (f *freezer) ModifyAncients(fn func(ethdb.AncientWriteOp) error) (writeSize int64, err error) {
 	if f.readonly {
 		return 0, errReadOnly
 	}
@@ -268,7 +259,7 @@ func (f *freezer) ModifyAncients(fn func(xpsdb.AncientWriteOp) error) (writeSize
 		if err != nil {
 			// The write operation has failed. Go back to the previous item position.
 			for name, table := range f.tables {
-				err := table.truncateHead(prevItem)
+				err := table.truncate(prevItem)
 				if err != nil {
 					log.Error("Freezer table roll-back failed", "table", name, "index", prevItem, "err", err)
 				}
@@ -288,8 +279,8 @@ func (f *freezer) ModifyAncients(fn func(xpsdb.AncientWriteOp) error) (writeSize
 	return writeSize, nil
 }
 
-// TruncateHead discards any recent data above the provided threshold number.
-func (f *freezer) TruncateHead(items uint64) error {
+// TruncateAncients discards any recent data above the provided threshold number.
+func (f *freezer) TruncateAncients(items uint64) error {
 	if f.readonly {
 		return errReadOnly
 	}
@@ -300,31 +291,11 @@ func (f *freezer) TruncateHead(items uint64) error {
 		return nil
 	}
 	for _, table := range f.tables {
-		if err := table.truncateHead(items); err != nil {
+		if err := table.truncate(items); err != nil {
 			return err
 		}
 	}
 	atomic.StoreUint64(&f.frozen, items)
-	return nil
-}
-
-// TruncateTail discards any recent data below the provided threshold number.
-func (f *freezer) TruncateTail(tail uint64) error {
-	if f.readonly {
-		return errReadOnly
-	}
-	f.writeLock.Lock()
-	defer f.writeLock.Unlock()
-
-	if atomic.LoadUint64(&f.tail) >= tail {
-		return nil
-	}
-	for _, table := range f.tables {
-		if err := table.truncateTail(tail); err != nil {
-			return err
-		}
-	}
-	atomic.StoreUint64(&f.tail, tail)
 	return nil
 }
 
@@ -342,59 +313,21 @@ func (f *freezer) Sync() error {
 	return nil
 }
 
-// validate checks that every table has the same length.
-// Used instead of `repair` in readonly mode.
-func (f *freezer) validate() error {
-	if len(f.tables) == 0 {
-		return nil
-	}
-	var (
-		length uint64
-		name   string
-	)
-	// Hack to get length of any table
-	for kind, table := range f.tables {
-		length = atomic.LoadUint64(&table.items)
-		name = kind
-		break
-	}
-	// Now check every table against that length
-	for kind, table := range f.tables {
-		items := atomic.LoadUint64(&table.items)
-		if length != items {
-			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", kind, name, items, length)
-		}
-	}
-	atomic.StoreUint64(&f.frozen, length)
-	return nil
-}
-
 // repair truncates all data tables to the same length.
 func (f *freezer) repair() error {
-	var (
-		head = uint64(math.MaxUint64)
-		tail = uint64(0)
-	)
+	min := uint64(math.MaxUint64)
 	for _, table := range f.tables {
 		items := atomic.LoadUint64(&table.items)
-		if head > items {
-			head = items
-		}
-		hidden := atomic.LoadUint64(&table.itemHidden)
-		if hidden > tail {
-			tail = hidden
+		if min > items {
+			min = items
 		}
 	}
 	for _, table := range f.tables {
-		if err := table.truncateHead(head); err != nil {
-			return err
-		}
-		if err := table.truncateTail(tail); err != nil {
+		if err := table.truncate(min); err != nil {
 			return err
 		}
 	}
-	atomic.StoreUint64(&f.frozen, head)
-	atomic.StoreUint64(&f.tail, tail)
+	atomic.StoreUint64(&f.frozen, min)
 	return nil
 }
 
@@ -403,7 +336,7 @@ func (f *freezer) repair() error {
 //
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
-func (f *freezer) freeze(db xpsdb.KeyValueStore) {
+func (f *freezer) freeze(db ethdb.KeyValueStore) {
 	nfdb := &nofreezedb{KeyValueStore: db}
 
 	var (
@@ -570,7 +503,7 @@ func (f *freezer) freeze(db xpsdb.KeyValueStore) {
 func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []common.Hash, err error) {
 	hashes = make([]common.Hash, 0, limit-number)
 
-	_, err = f.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+	_, err = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for ; number <= limit; number++ {
 			// Retrieve all the components of the canonical block.
 			hash := ReadCanonicalHash(nfdb, number)
@@ -611,123 +544,16 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 				return fmt.Errorf("can't write td to freezer: %v", err)
 			}
 
+			// bor block receipt
+			borBlockReceipt := ReadBorReceiptRLP(nfdb, hash, number)
+			if err := op.AppendRaw(freezerBorReceiptTable, number, borBlockReceipt); err != nil {
+				return fmt.Errorf("can't write bor-receipt to freezer: %v", err)
+			}
+
 			hashes = append(hashes, hash)
 		}
 		return nil
 	})
 
 	return hashes, err
-}
-
-// convertLegacyFn takes a raw freezer entry in an older format and
-// returns it in the new format.
-type convertLegacyFn = func([]byte) ([]byte, error)
-
-// MigrateTable processes the entries in a given table in sequence
-// converting them to a new format if they're of an old format.
-func (f *freezer) MigrateTable(kind string, convert convertLegacyFn) error {
-	if f.readonly {
-		return errReadOnly
-	}
-	f.writeLock.Lock()
-	defer f.writeLock.Unlock()
-
-	table, ok := f.tables[kind]
-	if !ok {
-		return errUnknownTable
-	}
-	// forEach iterates every entry in the table serially and in order, calling `fn`
-	// with the item as argument. If `fn` returns an error the iteration stops
-	// and that error will be returned.
-	forEach := func(t *freezerTable, offset uint64, fn func(uint64, []byte) error) error {
-		var (
-			items     = atomic.LoadUint64(&t.items)
-			batchSize = uint64(1024)
-			maxBytes  = uint64(1024 * 1024)
-		)
-		for i := offset; i < items; {
-			if i+batchSize > items {
-				batchSize = items - i
-			}
-			data, err := t.RetrieveItems(i, batchSize, maxBytes)
-			if err != nil {
-				return err
-			}
-			for j, item := range data {
-				if err := fn(i+uint64(j), item); err != nil {
-					return err
-				}
-			}
-			i += uint64(len(data))
-		}
-		return nil
-	}
-	// TODO(s1na): This is a sanity-check since as of now no process does tail-deletion. But the migration
-	// process assumes no deletion at tail and needs to be modified to account for that.
-	if table.itemOffset > 0 || table.itemHidden > 0 {
-		return fmt.Errorf("migration not supported for tail-deleted freezers")
-	}
-	ancientsPath := filepath.Dir(table.index.Name())
-	// Set up new dir for the migrated table, the content of which
-	// we'll at the end move over to the ancients dir.
-	migrationPath := filepath.Join(ancientsPath, "migration")
-	newTable, err := NewFreezerTable(migrationPath, kind, FreezerNoSnappy[kind], false)
-	if err != nil {
-		return err
-	}
-	var (
-		batch  = newTable.newBatch()
-		out    []byte
-		start  = time.Now()
-		logged = time.Now()
-		offset = newTable.items
-	)
-	if offset > 0 {
-		log.Info("found previous migration attempt", "migrated", offset)
-	}
-	// Iterate through entries and transform them
-	if err := forEach(table, offset, func(i uint64, blob []byte) error {
-		if i%10000 == 0 && time.Since(logged) > 16*time.Second {
-			log.Info("Processing legacy elements", "count", i, "elapsed", common.PrettyDuration(time.Since(start)))
-			logged = time.Now()
-		}
-		out, err = convert(blob)
-		if err != nil {
-			return err
-		}
-		if err := batch.AppendRaw(i, out); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	if err := batch.commit(); err != nil {
-		return err
-	}
-	log.Info("Replacing old table files with migrated ones", "elapsed", common.PrettyDuration(time.Since(start)))
-	// Release and delete old table files. Note this won't
-	// delete the index file.
-	table.releaseFilesAfter(0, true)
-
-	if err := newTable.Close(); err != nil {
-		return err
-	}
-	files, err := ioutil.ReadDir(migrationPath)
-	if err != nil {
-		return err
-	}
-	// Move migrated files to ancients dir.
-	for _, f := range files {
-		// This will replace the old index file as a side-effect.
-		if err := os.Rename(filepath.Join(migrationPath, f.Name()), filepath.Join(ancientsPath, f.Name())); err != nil {
-			return err
-		}
-	}
-	// Delete by now empty dir.
-	if err := os.Remove(migrationPath); err != nil {
-		return err
-	}
-
-	return nil
 }

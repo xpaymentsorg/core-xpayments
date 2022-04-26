@@ -1,25 +1,25 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package graphql
 
 const schema string = `
     # Bytes32 is a 32 byte binary string, represented as 0x-prefixed hexadecimal.
     scalar Bytes32
-    # Address is a 20 byte xPayments address, represented as 0x-prefixed hexadecimal.
+    # Address is a 20 byte Ethereum address, represented as 0x-prefixed hexadecimal.
     scalar Address
     # Bytes is an arbitrary length binary string, represented as 0x-prefixed hexadecimal.
     # An empty byte string is represented as '0x'. Byte strings must have an even number of hexadecimal nybbles.
@@ -36,7 +36,7 @@ const schema string = `
         mutation: Mutation
     }
 
-    # Account is an xPayments account at a particular block.
+    # Account is an Ethereum account at a particular block.
     type Account {
         # Address is the address owning the account.
         address: Address!
@@ -54,7 +54,7 @@ const schema string = `
         storage(slot: Bytes32!): Bytes32!
     }
 
-    # Log is an xPayments event log.
+    # Log is an Ethereum event log.
     type Log {
         # Index is the index of this log in the block.
         index: Int!
@@ -69,13 +69,13 @@ const schema string = `
         transaction: Transaction!
     }
 
-    #EIP-2718
+    #EIP-2718 
     type AccessTuple{
         address: Address!
         storageKeys : [Bytes32!]!
     }
 
-    # Transaction is an xPayments transaction.
+    # Transaction is an Ethereum transaction.
     type Transaction {
         # Hash is the hash of this transaction.
         hash: Bytes32!
@@ -94,12 +94,10 @@ const schema string = `
         value: BigInt!
         # GasPrice is the price offered to miners for gas, in wei per unit.
         gasPrice: BigInt!
-        # MaxFeePerGas is the maximum fee per gas offered to include a transaction, in wei.
-        maxFeePerGas: BigInt
-        # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei.
-        maxPriorityFeePerGas: BigInt
-        # EffectiveTip is the actual amount of reward going to miner after considering the max fee cap.
-        effectiveTip: BigInt
+        # MaxFeePerGas is the maximum fee per gas offered to include a transaction, in wei. 
+		maxFeePerGas: BigInt
+        # MaxPriorityFeePerGas is the maximum miner tip per gas offered to include a transaction, in wei. 
+		maxPriorityFeePerGas: BigInt
         # Gas is the maximum amount of gas this transaction can consume.
         gas: Long!
         # InputData is the data supplied to the target of the transaction.
@@ -162,7 +160,7 @@ const schema string = `
         topics: [[Bytes32!]!]
     }
 
-    # Block is an xPayments block.
+    # Block is an Ethereum block.
     type Block {
         # Number is the number of this block, starting at 0 for the genesis block.
         number: Long!
@@ -189,10 +187,8 @@ const schema string = `
         gasLimit: Long!
         # GasUsed is the amount of gas that was used executing transactions in this block.
         gasUsed: Long!
-        # BaseFeePerGas is the fee per unit of gas burned by the protocol in this block.
-        baseFeePerGas: BigInt
-        # NextBaseFeePerGas is the fee per unit of gas which needs to be burned in the next block.
-        nextBaseFeePerGas: BigInt
+        # BaseFeePerGas is the fee perunit of gas burned by the protocol in this block.
+		baseFeePerGas: BigInt
         # Timestamp is the unix timestamp at which this block was mined.
         timestamp: Long!
         # LogsBloom is a bloom filter that can be used to check if a block may
@@ -228,7 +224,7 @@ const schema string = `
         transactionAt(index: Int!): Transaction
         # Logs returns a filtered set of logs from this block.
         logs(filter: BlockFilterCriteria!): [Log!]!
-        # Account fetches an xPayments account at the current block's state.
+        # Account fetches an Ethereum account at the current block's state.
         account(address: Address!): Account!
         # Call executes a local call operation at the current block's state.
         call(data: CallData!): CallResult
@@ -248,10 +244,10 @@ const schema string = `
         gas: Long
         # GasPrice is the price, in wei, offered for each unit of gas.
         gasPrice: BigInt
-        # MaxFeePerGas is the maximum fee per gas offered, in wei.
-        maxFeePerGas: BigInt
-        # MaxPriorityFeePerGas is the maximum miner tip per gas offered, in wei.
-        maxPriorityFeePerGas: BigInt
+        # MaxFeePerGas is the maximum fee per gas offered, in wei. 
+		maxFeePerGas: BigInt
+        # MaxPriorityFeePerGas is the maximum miner tip per gas offered, in wei. 
+		maxPriorityFeePerGas: BigInt
         # Value is the value, in wei, sent along with the call.
         value: BigInt
         # Data is the data sent to the callee.
@@ -301,6 +297,12 @@ const schema string = `
         currentBlock: Long!
         # HighestBlock is the latest known block number.
         highestBlock: Long!
+        # PulledStates is the number of state entries fetched so far, or null
+        # if this is not known or not relevant.
+        pulledStates: Long
+        # KnownStates is the number of states the node knows of so far, or null
+        # if this is not known or not relevant.
+        knownStates: Long
     }
 
     # Pending represents the current pending state.
@@ -309,7 +311,7 @@ const schema string = `
       transactionCount: Int!
       # Transactions is a list of transactions in the current pending state.
       transactions: [Transaction!]
-      # Account fetches an xPayments account for the pending state.
+      # Account fetches an Ethereum account for the pending state.
       account(address: Address!): Account!
       # Call executes a local call operation for the pending state.
       call(data: CallData!): CallResult
@@ -319,7 +321,7 @@ const schema string = `
     }
 
     type Query {
-        # Block fetches an xPayments block by number or by hash. If neither is
+        # Block fetches an Ethereum block by number or by hash. If neither is
         # supplied, the most recent known block is returned.
         block(number: Long, hash: Bytes32): Block
         # Blocks returns all the blocks between two numbers, inclusive. If

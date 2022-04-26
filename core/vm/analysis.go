@@ -1,28 +1,28 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2014 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package vm
 
 const (
-	set2BitsMask = uint16(0b11)
-	set3BitsMask = uint16(0b111)
-	set4BitsMask = uint16(0b1111)
-	set5BitsMask = uint16(0b1_1111)
-	set6BitsMask = uint16(0b11_1111)
-	set7BitsMask = uint16(0b111_1111)
+	set2BitsMask = uint16(0b1100_0000_0000_0000)
+	set3BitsMask = uint16(0b1110_0000_0000_0000)
+	set4BitsMask = uint16(0b1111_0000_0000_0000)
+	set5BitsMask = uint16(0b1111_1000_0000_0000)
+	set6BitsMask = uint16(0b1111_1100_0000_0000)
+	set7BitsMask = uint16(0b1111_1110_0000_0000)
 )
 
 // bitvec is a bit vector which maps bytes in a program.
@@ -30,26 +30,32 @@ const (
 // it's data (i.e. argument of PUSHxx).
 type bitvec []byte
 
+var lookup = [8]byte{
+	0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1,
+}
+
 func (bits bitvec) set1(pos uint64) {
-	bits[pos/8] |= 1 << (pos % 8)
+	bits[pos/8] |= lookup[pos%8]
 }
 
 func (bits bitvec) setN(flag uint16, pos uint64) {
-	a := flag << (pos % 8)
-	bits[pos/8] |= byte(a)
-	if b := byte(a >> 8); b != 0 {
+	a := flag >> (pos % 8)
+	bits[pos/8] |= byte(a >> 8)
+	if b := byte(a); b != 0 {
+		//	If the bit-setting affects the neighbouring byte, we can assign - no need to OR it,
+		//	since it's the first write to that byte
 		bits[pos/8+1] = b
 	}
 }
 
 func (bits bitvec) set8(pos uint64) {
-	a := byte(0xFF << (pos % 8))
+	a := byte(0xFF >> (pos % 8))
 	bits[pos/8] |= a
 	bits[pos/8+1] = ^a
 }
 
 func (bits bitvec) set16(pos uint64) {
-	a := byte(0xFF << (pos % 8))
+	a := byte(0xFF >> (pos % 8))
 	bits[pos/8] |= a
 	bits[pos/8+1] = 0xFF
 	bits[pos/8+2] = ^a
@@ -57,7 +63,7 @@ func (bits bitvec) set16(pos uint64) {
 
 // codeSegment checks if the position is in a code segment.
 func (bits *bitvec) codeSegment(pos uint64) bool {
-	return (((*bits)[pos/8] >> (pos % 8)) & 1) == 0
+	return ((*bits)[pos/8] & (0x80 >> (pos % 8))) == 0
 }
 
 // codeBitmap collects data locations in code.

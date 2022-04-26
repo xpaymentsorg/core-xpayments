@@ -1,23 +1,23 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package bind generates xPayments contract Go bindings.
+// Package bind generates Ethereum contract Go bindings.
 //
-// Detailed usage document and tutorial available on the go-xpayments Wiki page:
-// https://github.com/xpayments/go-xpayments/wiki/Native-DApps:-Go-bindings-to-xPayments-contracts
+// Detailed usage document and tutorial available on the go-ethereum Wiki page:
+// https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
 package bind
 
 import (
@@ -30,8 +30,8 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/xpaymentsorg/go-xpayments/accounts/abi"
-	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.
@@ -60,7 +60,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 	)
 	for i := 0; i < len(types); i++ {
 		// Parse the actual ABI to generate the binding for
-		xvmABI, err := abi.JSON(strings.NewReader(abis[i]))
+		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
 		if err != nil {
 			return "", err
 		}
@@ -88,14 +88,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			transactIdentifiers = make(map[string]bool)
 			eventIdentifiers    = make(map[string]bool)
 		)
-
-		for _, input := range xvmABI.Constructor.Inputs {
-			if hasStruct(input.Type) {
-				bindStructType[lang](input.Type, structs)
-			}
-		}
-
-		for _, original := range xvmABI.Methods {
+		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
 			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
@@ -136,7 +129,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 				transacts[original.Name] = &tmplMethod{Original: original, Normalized: normalized, Structured: structured(original.Outputs)}
 			}
 		}
-		for _, original := range xvmABI.Events {
+		for _, original := range evmABI.Events {
 			// Skip anonymous events as they don't support explicit filtering
 			if original.Anonymous {
 				continue
@@ -166,11 +159,11 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			events[original.Name] = &tmplEvent{Original: original, Normalized: normalized}
 		}
 		// Add two special fallback functions if they exist
-		if xvmABI.HasFallback() {
-			fallback = &tmplMethod{Original: xvmABI.Fallback}
+		if evmABI.HasFallback() {
+			fallback = &tmplMethod{Original: evmABI.Fallback}
 		}
-		if xvmABI.HasReceive() {
-			receive = &tmplMethod{Original: xvmABI.Receive}
+		if evmABI.HasReceive() {
+			receive = &tmplMethod{Original: evmABI.Receive}
 		}
 		// There is no easy way to pass arbitrary java objects to the Go side.
 		if len(structs) > 0 && lang == LangJava {
@@ -181,7 +174,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			Type:        capitalise(types[i]),
 			InputABI:    strings.Replace(strippedABI, "\"", "\\\"", -1),
 			InputBin:    strings.TrimPrefix(strings.TrimSpace(bytecodes[i]), "0x"),
-			Constructor: xvmABI.Constructor,
+			Constructor: evmABI.Constructor,
 			Calls:       calls,
 			Transacts:   transacts,
 			Fallback:    fallback,

@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of go-xpayments.
+// Copyright 2020 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-xpayments is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-xpayments is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-xpayments. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
 package v4test
 
@@ -23,9 +23,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/internal/utesting"
-	"github.com/xpaymentsorg/go-xpayments/p2p/discover/v4wire"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/internal/utesting"
+	"github.com/ethereum/go-ethereum/p2p/discover/v4wire"
 )
 
 const (
@@ -229,7 +229,7 @@ func PingPastExpiration(t *utesting.T) {
 
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
+		t.Fatal("Expected no reply, got", reply)
 	}
 }
 
@@ -247,7 +247,7 @@ func WrongPacketType(t *utesting.T) {
 
 	reply, _, _ := te.read(te.l1)
 	if reply != nil {
-		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
+		t.Fatal("Expected no reply, got", reply)
 	}
 }
 
@@ -282,16 +282,9 @@ func FindnodeWithoutEndpointProof(t *utesting.T) {
 	rand.Read(req.Target[:])
 	te.send(te.l1, &req)
 
-	for {
-		reply, _, _ := te.read(te.l1)
-		if reply == nil {
-			// No response, all good
-			break
-		}
-		if reply.Kind() == v4wire.PingPacket {
-			continue // A ping is ok, just ignore it
-		}
-		t.Fatalf("Expected no reply, got %v %v", reply.Name(), reply)
+	reply, _, _ := te.read(te.l1)
+	if reply != nil {
+		t.Fatal("Expected no response, got", reply)
 	}
 }
 
@@ -311,7 +304,7 @@ func BasicFindnode(t *utesting.T) {
 		t.Fatal("read find nodes", err)
 	}
 	if reply.Kind() != v4wire.NeighborsPacket {
-		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
+		t.Fatal("Expected neighbors, got", reply.Name())
 	}
 }
 
@@ -348,7 +341,7 @@ func UnsolicitedNeighbors(t *utesting.T) {
 		t.Fatal("read find nodes", err)
 	}
 	if reply.Kind() != v4wire.NeighborsPacket {
-		t.Fatalf("Expected neighbors, got %v %v", reply.Name(), reply)
+		t.Fatal("Expected neighbors, got", reply.Name())
 	}
 	nodes := reply.(*v4wire.Neighbors).Nodes
 	if contains(nodes, encFakeKey) {

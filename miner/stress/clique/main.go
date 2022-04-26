@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // This file contains a miner stress test based on the Clique consensus engine.
 package main
@@ -27,21 +27,21 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/common/fdlimit"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/miner"
-	"github.com/xpaymentsorg/go-xpayments/node"
-	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xps"
-	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
-	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func main() {
@@ -66,12 +66,12 @@ func main() {
 
 	var (
 		stacks []*node.Node
-		nodes  []*xps.xPayments
+		nodes  []*eth.Ethereum
 		enodes []*enode.Node
 	)
 	for _, sealer := range sealers {
 		// Start the node and wait until it's up
-		stack, xpsBackend, err := makeSealer(genesis)
+		stack, ethBackend, err := makeSealer(genesis)
 		if err != nil {
 			panic(err)
 		}
@@ -86,7 +86,7 @@ func main() {
 		}
 		// Start tracking the node and its enode
 		stacks = append(stacks, stack)
-		nodes = append(nodes, xpsBackend)
+		nodes = append(nodes, ethBackend)
 		enodes = append(enodes, stack.Server().Self())
 
 		// Inject the signer key and start sealing with it
@@ -181,12 +181,12 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	return genesis
 }
 
-func makeSealer(genesis *core.Genesis) (*node.Node, *xps.xPayments, error) {
-	// Define the basic configurations for the xPayments node
+func makeSealer(genesis *core.Genesis) (*node.Node, *eth.Ethereum, error) {
+	// Define the basic configurations for the Ethereum node
 	datadir, _ := ioutil.TempDir("", "")
 
 	config := &node.Config{
-		Name:    "gpay",
+		Name:    "geth",
 		Version: params.Version,
 		DataDir: datadir,
 		P2P: p2p.Config{
@@ -195,20 +195,20 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *xps.xPayments, error) {
 			MaxPeers:    25,
 		},
 	}
-	// Start the node and configure a full xPayments node on it
+	// Start the node and configure a full Ethereum node on it
 	stack, err := node.New(config)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Create and register the backend
-	xpsBackend, err := xps.New(stack, &xpsconfig.Config{
+	ethBackend, err := eth.New(stack, &ethconfig.Config{
 		Genesis:         genesis,
 		NetworkId:       genesis.Config.ChainID.Uint64(),
 		SyncMode:        downloader.FullSync,
 		DatabaseCache:   256,
 		DatabaseHandles: 256,
 		TxPool:          core.DefaultTxPoolConfig,
-		GPO:             xpsconfig.Defaults.GPO,
+		GPO:             ethconfig.Defaults.GPO,
 		Miner: miner.Config{
 			GasCeil:  genesis.GasLimit * 11 / 10,
 			GasPrice: big.NewInt(1),
@@ -220,5 +220,5 @@ func makeSealer(genesis *core.Genesis) (*node.Node, *xps.xPayments, error) {
 	}
 
 	err = stack.Start()
-	return stack, xpsBackend, err
+	return stack, ethBackend, err
 }

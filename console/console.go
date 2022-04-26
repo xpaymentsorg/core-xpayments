@@ -1,23 +1,22 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package console
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,17 +26,16 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"syscall"
 
 	"github.com/dop251/goja"
+	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/internal/jsre"
+	"github.com/ethereum/go-ethereum/internal/jsre/deps"
+	"github.com/ethereum/go-ethereum/internal/web3ext"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
-	"github.com/xpaymentsorg/go-xpayments/console/prompt"
-	"github.com/xpaymentsorg/go-xpayments/internal/jsre"
-	"github.com/xpaymentsorg/go-xpayments/internal/jsre/deps"
-	"github.com/xpaymentsorg/go-xpayments/internal/web3ext"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
 var (
@@ -58,7 +56,7 @@ const DefaultPrompt = "> "
 type Config struct {
 	DataDir  string              // Data directory to store the console history at
 	DocRoot  string              // Filesystem path from where to load JavaScript files from
-	Client   *rpc.Client         // RPC client to execute xPayments requests through
+	Client   *rpc.Client         // RPC client to execute Ethereum requests through
 	Prompt   string              // Input prompt prefix string (defaults to DefaultPrompt)
 	Prompter prompt.UserPrompter // Input prompter to allow interactive user feedback (defaults to TerminalPrompter)
 	Printer  io.Writer           // Output writer to serialize any display strings to (defaults to os.Stdout)
@@ -69,20 +67,13 @@ type Config struct {
 // JavaScript console attached to a running node via an external or in-process RPC
 // client.
 type Console struct {
-	client   *rpc.Client         // RPC client to execute xPayments requests through
+	client   *rpc.Client         // RPC client to execute Ethereum requests through
 	jsre     *jsre.JSRE          // JavaScript runtime environment running the interpreter
 	prompt   string              // Input prompt prefix string
 	prompter prompt.UserPrompter // Input prompter to allow interactive user feedback
 	histPath string              // Absolute path to the console scrollback history
 	history  []string            // Scroll history maintained by the console
 	printer  io.Writer           // Output writer to serialize any display strings to
-
-	interactiveStopped chan struct{}
-	stopInteractiveCh  chan struct{}
-	signalReceived     chan struct{}
-	stopped            chan struct{}
-	wg                 sync.WaitGroup
-	stopOnce           sync.Once
 }
 
 // New initializes a JavaScript interpreted runtime environment and sets defaults
@@ -101,16 +92,12 @@ func New(config Config) (*Console, error) {
 
 	// Initialize the console and return
 	console := &Console{
-		client:             config.Client,
-		jsre:               jsre.New(config.DocRoot, config.Printer),
-		prompt:             config.Prompt,
-		prompter:           config.Prompter,
-		printer:            config.Printer,
-		histPath:           filepath.Join(config.DataDir, HistoryFile),
-		interactiveStopped: make(chan struct{}),
-		stopInteractiveCh:  make(chan struct{}),
-		signalReceived:     make(chan struct{}, 1),
-		stopped:            make(chan struct{}),
+		client:   config.Client,
+		jsre:     jsre.New(config.DocRoot, config.Printer),
+		prompt:   config.Prompt,
+		prompter: config.Prompter,
+		printer:  config.Printer,
+		histPath: filepath.Join(config.DataDir, HistoryFile),
 	}
 	if err := os.MkdirAll(config.DataDir, 0700); err != nil {
 		return nil, err
@@ -118,10 +105,6 @@ func New(config Config) (*Console, error) {
 	if err := console.init(config.Preload); err != nil {
 		return nil, err
 	}
-
-	console.wg.Add(1)
-	go console.interruptHandler()
-
 	return console, nil
 }
 
@@ -208,7 +191,7 @@ func (c *Console) initExtensions() error {
 	if err != nil {
 		return fmt.Errorf("api modules: %v", err)
 	}
-	aliases := map[string]struct{}{"xps": {}, "personal": {}}
+	aliases := map[string]struct{}{"eth": {}, "personal": {}}
 	for api := range apis {
 		if api == "web3" {
 			continue
@@ -246,19 +229,19 @@ func (c *Console) initAdmin(vm *goja.Runtime, bridge *bridge) {
 //
 // If the console is in interactive mode and the 'personal' API is available, override
 // the openWallet, unlockAccount, newAccount and sign methods since these require user
-// interaction. The original web3 callbacks are stored in 'jxps'. These will be called
+// interaction. The original web3 callbacks are stored in 'jeth'. These will be called
 // by the bridge after the prompt and send the original web3 request to the backend.
 func (c *Console) initPersonal(vm *goja.Runtime, bridge *bridge) {
 	personal := getObject(vm, "personal")
 	if personal == nil || c.prompter == nil {
 		return
 	}
-	jxps := vm.NewObject()
-	vm.Set("jxps", jxps)
-	jxps.Set("openWallet", personal.Get("openWallet"))
-	jxps.Set("unlockAccount", personal.Get("unlockAccount"))
-	jxps.Set("newAccount", personal.Get("newAccount"))
-	jxps.Set("sign", personal.Get("sign"))
+	jeth := vm.NewObject()
+	vm.Set("jeth", jeth)
+	jeth.Set("openWallet", personal.Get("openWallet"))
+	jeth.Set("unlockAccount", personal.Get("unlockAccount"))
+	jeth.Set("newAccount", personal.Get("newAccount"))
+	jeth.Set("sign", personal.Get("sign"))
 	personal.Set("openWallet", jsre.MakeCallback(vm, bridge.OpenWallet))
 	personal.Set("unlockAccount", jsre.MakeCallback(vm, bridge.UnlockAccount))
 	personal.Set("newAccount", jsre.MakeCallback(vm, bridge.NewAccount))
@@ -294,7 +277,7 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 		return "", nil, ""
 	}
 	// Chunck data to relevant part for autocompletion
-	// E.g. in case of nested lines xps.getBalance(xps.coinb<tab><tab>
+	// E.g. in case of nested lines eth.getBalance(eth.coinb<tab><tab>
 	start := pos - 1
 	for ; start > 0; start-- {
 		// Skip all methods and namespaces (i.e. including the dot)
@@ -313,18 +296,18 @@ func (c *Console) AutoCompleteInput(line string, pos int) (string, []string, str
 	return line[:start], c.jsre.CompleteKeywords(line[start:pos]), line[pos:]
 }
 
-// Welcome show summary of current Gpay instance and some metadata about the
+// Welcome show summary of current Geth instance and some metadata about the
 // console's available modules.
 func (c *Console) Welcome() {
-	message := "Welcome to the Gpay JavaScript console!\n\n"
+	message := "Welcome to the Geth JavaScript console!\n\n"
 
-	// Print some generic Gpay metadata
+	// Print some generic Geth metadata
 	if res, err := c.jsre.Run(`
 		var message = "instance: " + web3.version.node + "\n";
 		try {
-			message += "coinbase: " + xps.coinbase + "\n";
+			message += "coinbase: " + eth.coinbase + "\n";
 		} catch (err) {}
-		message += "at block: " + xps.blockNumber + " (" + new Date(1000 * xps.getBlock(xps.blockNumber).timestamp) + ")\n";
+		message += "at block: " + eth.blockNumber + " (" + new Date(1000 * eth.getBlock(eth.blockNumber).timestamp) + ")\n";
 		try {
 			message += " datadir: " + admin.datadir + "\n";
 		} catch (err) {}
@@ -354,63 +337,9 @@ func (c *Console) Evaluate(statement string) {
 		}
 	}()
 	c.jsre.Evaluate(statement, c.printer)
-
-	// Avoid exiting Interactive when jsre was interrupted by SIGINT.
-	c.clearSignalReceived()
 }
 
-// interruptHandler runs in its own goroutine and waits for signals.
-// When a signal is received, it interrupts the JS interpreter.
-func (c *Console) interruptHandler() {
-	defer c.wg.Done()
-
-	// During Interactive, liner inhibits the signal while it is prompting for
-	// input. However, the signal will be received while evaluating JS.
-	//
-	// On unsupported terminals, SIGINT can also happen while prompting.
-	// Unfortunately, it is not possible to abort the prompt in this case and
-	// the c.readLines goroutine leaks.
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT)
-	defer signal.Stop(sig)
-
-	for {
-		select {
-		case <-sig:
-			c.setSignalReceived()
-			c.jsre.Interrupt(errors.New("interrupted"))
-		case <-c.stopInteractiveCh:
-			close(c.interactiveStopped)
-			c.jsre.Interrupt(errors.New("interrupted"))
-		case <-c.stopped:
-			return
-		}
-	}
-}
-
-func (c *Console) setSignalReceived() {
-	select {
-	case c.signalReceived <- struct{}{}:
-	default:
-	}
-}
-
-func (c *Console) clearSignalReceived() {
-	select {
-	case <-c.signalReceived:
-	default:
-	}
-}
-
-// StopInteractive causes Interactive to return as soon as possible.
-func (c *Console) StopInteractive() {
-	select {
-	case c.stopInteractiveCh <- struct{}{}:
-	case <-c.stopped:
-	}
-}
-
-// Interactive starts an interactive user session, where in.put is propted from
+// Interactive starts an interactive user session, where input is propted from
 // the configured user prompter.
 func (c *Console) Interactive() {
 	var (
@@ -420,11 +349,15 @@ func (c *Console) Interactive() {
 		inputLine   = make(chan string, 1) // receives user input
 		inputErr    = make(chan error, 1)  // receives liner errors
 		requestLine = make(chan string)    // requests a line of input
+		interrupt   = make(chan os.Signal, 1)
 	)
 
-	defer func() {
-		c.writeHistory()
-	}()
+	// Monitor Ctrl-C. While liner does turn on the relevant terminal mode bits to avoid
+	// the signal, a signal can still be received for unsupported terminals. Unfortunately
+	// there is no way to cancel the line reader when this happens. The readLines
+	// goroutine will be leaked in this case.
+	signal.Notify(interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(interrupt)
 
 	// The line reader runs in a separate goroutine.
 	go c.readLines(inputLine, inputErr, requestLine)
@@ -435,14 +368,7 @@ func (c *Console) Interactive() {
 		requestLine <- prompt
 
 		select {
-		case <-c.interactiveStopped:
-			fmt.Fprintln(c.printer, "node is down, exiting console")
-			return
-
-		case <-c.signalReceived:
-			// SIGINT received while prompting for input -> unsupported terminal.
-			// I'm not sure if the best choice would be to leave the console running here.
-			// Bash keeps running in this case. node.js does not.
+		case <-interrupt:
 			fmt.Fprintln(c.printer, "caught interrupt, exiting")
 			return
 
@@ -550,19 +476,12 @@ func (c *Console) Execute(path string) error {
 
 // Stop cleans up the console and terminates the runtime environment.
 func (c *Console) Stop(graceful bool) error {
-	c.stopOnce.Do(func() {
-		// Stop the interrupt handler.
-		close(c.stopped)
-		c.wg.Wait()
-	})
-
-	c.jsre.Stop(graceful)
-	return nil
-}
-
-func (c *Console) writeHistory() error {
 	if err := ioutil.WriteFile(c.histPath, []byte(strings.Join(c.history, "\n")), 0600); err != nil {
 		return err
 	}
-	return os.Chmod(c.histPath, 0600) // Force 0600, even if it was different previously
+	if err := os.Chmod(c.histPath, 0600); err != nil { // Force 0600, even if it was different previously
+		return err
+	}
+	c.jsre.Stop(graceful)
+	return nil
 }

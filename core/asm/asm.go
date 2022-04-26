@@ -1,30 +1,30 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2017 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Provides support for dealing with XVM assembly instructions (e.g., disassembling them).
+// Provides support for dealing with EVM assembly instructions (e.g., disassembling them).
 package asm
 
 import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
-// Iterator for disassembled XVM instructions
+// Iterator for disassembled EVM instructions
 type instructionIterator struct {
 	code    []byte
 	pc      uint64
@@ -99,7 +99,7 @@ func (it *instructionIterator) Arg() []byte {
 	return it.arg
 }
 
-// Pretty-print all disassembled XVM instructions to stdout.
+// Pretty-print all disassembled EVM instructions to stdout.
 func PrintDisassembled(code string) error {
 	script, err := hex.DecodeString(code)
 	if err != nil {
@@ -117,7 +117,7 @@ func PrintDisassembled(code string) error {
 	return it.Error()
 }
 
-// Return all disassembled XVM instructions in human-readable format.
+// Return all disassembled EVM instructions in human-readable format.
 func Disassemble(script []byte) ([]string, error) {
 	instrs := make([]string, 0)
 

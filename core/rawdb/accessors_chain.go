@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rawdb
 
@@ -24,38 +24,43 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
-func ReadCanonicalHash(db xpsdb.Reader, number uint64) common.Hash {
-	var data []byte
-	db.ReadAncients(func(reader xpsdb.AncientReader) error {
-		data, _ = reader.Ancient(freezerHashTable, number)
+func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
+	data, _ := db.Ancient(freezerHashTable, number)
+	if len(data) == 0 {
+		data, _ = db.Get(headerHashKey(number))
+		// In the background freezer is moving data from leveldb to flatten files.
+		// So during the first check for ancient db, the data is not yet in there,
+		// but when we reach into leveldb, the data was already moved. That would
+		// result in a not found error.
 		if len(data) == 0 {
-			// Get it by hash from leveldb
-			data, _ = db.Get(headerHashKey(number))
+			data, _ = db.Ancient(freezerHashTable, number)
 		}
-		return nil
-	})
+	}
+	if len(data) == 0 {
+		return common.Hash{}
+	}
 	return common.BytesToHash(data)
 }
 
 // WriteCanonicalHash stores the hash assigned to a canonical block number.
-func WriteCanonicalHash(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func WriteCanonicalHash(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Put(headerHashKey(number), hash.Bytes()); err != nil {
 		log.Crit("Failed to store number to hash mapping", "err", err)
 	}
 }
 
 // DeleteCanonicalHash removes the number to hash canonical mapping.
-func DeleteCanonicalHash(db xpsdb.KeyValueWriter, number uint64) {
+func DeleteCanonicalHash(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Delete(headerHashKey(number)); err != nil {
 		log.Crit("Failed to delete number to hash mapping", "err", err)
 	}
@@ -63,7 +68,7 @@ func DeleteCanonicalHash(db xpsdb.KeyValueWriter, number uint64) {
 
 // ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
 // both canonical and reorged forks included.
-func ReadAllHashes(db xpsdb.Iteratee, number uint64) []common.Hash {
+func ReadAllHashes(db ethdb.Iteratee, number uint64) []common.Hash {
 	prefix := headerKeyPrefix(number)
 
 	hashes := make([]common.Hash, 0, 1)
@@ -83,10 +88,10 @@ type NumberHash struct {
 	Hash   common.Hash
 }
 
-// ReadAllHashesInRange retrieves all the hashes assigned to blocks at certain
-// heights, both canonical and reorged forks included.
-// This mxpsod considers both limits to be _inclusive_.
-func ReadAllHashesInRange(db xpsdb.Iteratee, first, last uint64) []*NumberHash {
+// ReadAllHashes retrieves all the hashes assigned to blocks at a certain heights,
+// both canonical and reorged forks included.
+// This method considers both limits to be _inclusive_.
+func ReadAllHashesInRange(db ethdb.Iteratee, first, last uint64) []*NumberHash {
 	var (
 		start     = encodeBlockNumber(first)
 		keyLength = len(headerPrefix) + 8 + 32
@@ -112,7 +117,7 @@ func ReadAllHashesInRange(db xpsdb.Iteratee, first, last uint64) []*NumberHash {
 // ReadAllCanonicalHashes retrieves all canonical number and hash mappings at the
 // certain chain range. If the accumulated entries reaches the given threshold,
 // abort the iteration and return the semi-finish result.
-func ReadAllCanonicalHashes(db xpsdb.Iteratee, from uint64, to uint64, limit int) ([]uint64, []common.Hash) {
+func ReadAllCanonicalHashes(db ethdb.Iteratee, from uint64, to uint64, limit int) ([]uint64, []common.Hash) {
 	// Short circuit if the limit is 0.
 	if limit == 0 {
 		return nil, nil
@@ -143,7 +148,7 @@ func ReadAllCanonicalHashes(db xpsdb.Iteratee, from uint64, to uint64, limit int
 }
 
 // ReadHeaderNumber returns the header number assigned to a hash.
-func ReadHeaderNumber(db xpsdb.KeyValueReader, hash common.Hash) *uint64 {
+func ReadHeaderNumber(db ethdb.KeyValueReader, hash common.Hash) *uint64 {
 	data, _ := db.Get(headerNumberKey(hash))
 	if len(data) != 8 {
 		return nil
@@ -153,7 +158,7 @@ func ReadHeaderNumber(db xpsdb.KeyValueReader, hash common.Hash) *uint64 {
 }
 
 // WriteHeaderNumber stores the hash->number mapping.
-func WriteHeaderNumber(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func WriteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	key := headerNumberKey(hash)
 	enc := encodeBlockNumber(number)
 	if err := db.Put(key, enc); err != nil {
@@ -162,14 +167,14 @@ func WriteHeaderNumber(db xpsdb.KeyValueWriter, hash common.Hash, number uint64)
 }
 
 // DeleteHeaderNumber removes hash->number mapping.
-func DeleteHeaderNumber(db xpsdb.KeyValueWriter, hash common.Hash) {
+func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
 		log.Crit("Failed to delete hash to number mapping", "err", err)
 	}
 }
 
 // ReadHeadHeaderHash retrieves the hash of the current canonical head header.
-func ReadHeadHeaderHash(db xpsdb.KeyValueReader) common.Hash {
+func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headHeaderKey)
 	if len(data) == 0 {
 		return common.Hash{}
@@ -178,14 +183,14 @@ func ReadHeadHeaderHash(db xpsdb.KeyValueReader) common.Hash {
 }
 
 // WriteHeadHeaderHash stores the hash of the current canonical head header.
-func WriteHeadHeaderHash(db xpsdb.KeyValueWriter, hash common.Hash) {
+func WriteHeadHeaderHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headHeaderKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last header's hash", "err", err)
 	}
 }
 
 // ReadHeadBlockHash retrieves the hash of the current canonical head block.
-func ReadHeadBlockHash(db xpsdb.KeyValueReader) common.Hash {
+func ReadHeadBlockHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headBlockKey)
 	if len(data) == 0 {
 		return common.Hash{}
@@ -194,14 +199,14 @@ func ReadHeadBlockHash(db xpsdb.KeyValueReader) common.Hash {
 }
 
 // WriteHeadBlockHash stores the head block's hash.
-func WriteHeadBlockHash(db xpsdb.KeyValueWriter, hash common.Hash) {
+func WriteHeadBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headBlockKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last block's hash", "err", err)
 	}
 }
 
 // ReadHeadFastBlockHash retrieves the hash of the current fast-sync head block.
-func ReadHeadFastBlockHash(db xpsdb.KeyValueReader) common.Hash {
+func ReadHeadFastBlockHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headFastBlockKey)
 	if len(data) == 0 {
 		return common.Hash{}
@@ -210,7 +215,7 @@ func ReadHeadFastBlockHash(db xpsdb.KeyValueReader) common.Hash {
 }
 
 // WriteHeadFastBlockHash stores the hash of the current fast-sync head block.
-func WriteHeadFastBlockHash(db xpsdb.KeyValueWriter, hash common.Hash) {
+func WriteHeadFastBlockHash(db ethdb.KeyValueWriter, hash common.Hash) {
 	if err := db.Put(headFastBlockKey, hash.Bytes()); err != nil {
 		log.Crit("Failed to store last fast block's hash", "err", err)
 	}
@@ -218,7 +223,7 @@ func WriteHeadFastBlockHash(db xpsdb.KeyValueWriter, hash common.Hash) {
 
 // ReadLastPivotNumber retrieves the number of the last pivot block. If the node
 // full synced, the last pivot will always be nil.
-func ReadLastPivotNumber(db xpsdb.KeyValueReader) *uint64 {
+func ReadLastPivotNumber(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(lastPivotKey)
 	if len(data) == 0 {
 		return nil
@@ -232,7 +237,7 @@ func ReadLastPivotNumber(db xpsdb.KeyValueReader) *uint64 {
 }
 
 // WriteLastPivotNumber stores the number of the last pivot block.
-func WriteLastPivotNumber(db xpsdb.KeyValueWriter, pivot uint64) {
+func WriteLastPivotNumber(db ethdb.KeyValueWriter, pivot uint64) {
 	enc, err := rlp.EncodeToBytes(pivot)
 	if err != nil {
 		log.Crit("Failed to encode pivot block number", "err", err)
@@ -242,10 +247,28 @@ func WriteLastPivotNumber(db xpsdb.KeyValueWriter, pivot uint64) {
 	}
 }
 
+// ReadFastTrieProgress retrieves the number of tries nodes fast synced to allow
+// reporting correct numbers across restarts.
+func ReadFastTrieProgress(db ethdb.KeyValueReader) uint64 {
+	data, _ := db.Get(fastTrieProgressKey)
+	if len(data) == 0 {
+		return 0
+	}
+	return new(big.Int).SetBytes(data).Uint64()
+}
+
+// WriteFastTrieProgress stores the fast sync trie process counter to support
+// retrieving it across restarts.
+func WriteFastTrieProgress(db ethdb.KeyValueWriter, count uint64) {
+	if err := db.Put(fastTrieProgressKey, new(big.Int).SetUint64(count).Bytes()); err != nil {
+		log.Crit("Failed to store fast sync trie progress", "err", err)
+	}
+}
+
 // ReadTxIndexTail retrieves the number of oldest indexed block
 // whose transaction indices has been indexed. If the corresponding entry
 // is non-existent in database it means the indexing has been finished.
-func ReadTxIndexTail(db xpsdb.KeyValueReader) *uint64 {
+func ReadTxIndexTail(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(txIndexTailKey)
 	if len(data) != 8 {
 		return nil
@@ -256,14 +279,14 @@ func ReadTxIndexTail(db xpsdb.KeyValueReader) *uint64 {
 
 // WriteTxIndexTail stores the number of oldest indexed block
 // into database.
-func WriteTxIndexTail(db xpsdb.KeyValueWriter, number uint64) {
+func WriteTxIndexTail(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(txIndexTailKey, encodeBlockNumber(number)); err != nil {
 		log.Crit("Failed to store the transaction index tail", "err", err)
 	}
 }
 
 // ReadFastTxLookupLimit retrieves the tx lookup limit used in fast sync.
-func ReadFastTxLookupLimit(db xpsdb.KeyValueReader) *uint64 {
+func ReadFastTxLookupLimit(db ethdb.KeyValueReader) *uint64 {
 	data, _ := db.Get(fastTxLookupLimitKey)
 	if len(data) != 8 {
 		return nil
@@ -273,83 +296,40 @@ func ReadFastTxLookupLimit(db xpsdb.KeyValueReader) *uint64 {
 }
 
 // WriteFastTxLookupLimit stores the txlookup limit used in fast sync into database.
-func WriteFastTxLookupLimit(db xpsdb.KeyValueWriter, number uint64) {
+func WriteFastTxLookupLimit(db ethdb.KeyValueWriter, number uint64) {
 	if err := db.Put(fastTxLookupLimitKey, encodeBlockNumber(number)); err != nil {
 		log.Crit("Failed to store transaction lookup limit for fast sync", "err", err)
 	}
 }
 
-// ReadHeaderRange returns the rlp-encoded headers, starting at 'number', and going
-// backwards towards genesis. This mxpsod assumes that the caller already has
-// placed a cap on count, to prevent DoS issues.
-// Since this method operates in head-towards-genesis mode, it will return an empty
-// slice in case the head ('number') is missing. Hence, the caller must ensure that
-// the head ('number') argument is actually an existing header.
-//
-// N.B: Since the input is a number, as opposed to a hash, it's implicit that
-// this method only operates on canon headers.
-func ReadHeaderRange(db xpsdb.Reader, number uint64, count uint64) []rlp.RawValue {
-	var rlpHeaders []rlp.RawValue
-	if count == 0 {
-		return rlpHeaders
-	}
-	i := number
-	if count-1 > number {
-		// It's ok to request block 0, 1 item
-		count = number + 1
-	}
-	limit, _ := db.Ancients()
-	// First read live blocks
-	if i >= limit {
-		// If we need to read live blocks, we need to figure out the hash first
-		hash := ReadCanonicalHash(db, number)
-		for ; i >= limit && count > 0; i-- {
-			if data, _ := db.Get(headerKey(i, hash)); len(data) > 0 {
-				rlpHeaders = append(rlpHeaders, data)
-				// Get the parent hash for next query
-				hash = types.HeaderParentHashFromRLP(data)
-			} else {
-				break // Maybe got moved to ancients
-			}
-			count--
-		}
-	}
-	if count == 0 {
-		return rlpHeaders
-	}
-	// read remaining from ancients
-	max := count * 700
-	data, err := db.AncientRange(freezerHeaderTable, i+1-count, count, max)
-	if err == nil && uint64(len(data)) == count {
-		// the data is on the order [h, h+1, .., n] -- reordering needed
-		for i := range data {
-			rlpHeaders = append(rlpHeaders, data[len(data)-1-i])
-		}
-	}
-	return rlpHeaders
-}
-
 // ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
-func ReadHeaderRLP(db xpsdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	var data []byte
-	db.ReadAncients(func(reader xpsdb.AncientReader) error {
-		// First try to look up the data in ancient database. Extra hash
-		// comparison is necessary since ancient database only maintains
-		// the canonical data.
-		data, _ = reader.Ancient(freezerHeaderTable, number)
-		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
-			return nil
-		}
-		// If not, try reading from leveldb
-		data, _ = db.Get(headerKey(number, hash))
-		return nil
-	})
-	return data
+func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	// First try to look up the data in ancient database. Extra hash
+	// comparison is necessary since ancient database only maintains
+	// the canonical data.
+	data, _ := db.Ancient(freezerHeaderTable, number)
+	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		return data
+	}
+	// Then try to look up the data in leveldb.
+	data, _ = db.Get(headerKey(number, hash))
+	if len(data) > 0 {
+		return data
+	}
+	// In the background freezer is moving data from leveldb to flatten files.
+	// So during the first check for ancient db, the data is not yet in there,
+	// but when we reach into leveldb, the data was already moved. That would
+	// result in a not found error.
+	data, _ = db.Ancient(freezerHeaderTable, number)
+	if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		return data
+	}
+	return nil // Can't find the data anywhere.
 }
 
 // HasHeader verifies the existence of a block header corresponding to the hash.
-func HasHeader(db xpsdb.Reader, hash common.Hash, number uint64) bool {
-	if isCanon(db, number, hash) {
+func HasHeader(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
 		return true
 	}
 	if has, err := db.Has(headerKey(number, hash)); !has || err != nil {
@@ -359,7 +339,7 @@ func HasHeader(db xpsdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadHeader retrieves the block header corresponding to the hash.
-func ReadHeader(db xpsdb.Reader, hash common.Hash, number uint64) *types.Header {
+func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header {
 	data := ReadHeaderRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
@@ -374,7 +354,7 @@ func ReadHeader(db xpsdb.Reader, hash common.Hash, number uint64) *types.Header 
 
 // WriteHeader stores a block header into the database and also stores the hash-
 // to-number mapping.
-func WriteHeader(db xpsdb.KeyValueWriter, header *types.Header) {
+func WriteHeader(db ethdb.KeyValueWriter, header *types.Header) {
 	var (
 		hash   = header.Hash()
 		number = header.Number.Uint64()
@@ -394,7 +374,7 @@ func WriteHeader(db xpsdb.KeyValueWriter, header *types.Header) {
 }
 
 // DeleteHeader removes all block header data associated with a hash.
-func DeleteHeader(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeleteHeader(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	deleteHeaderWithoutNumber(db, hash, number)
 	if err := db.Delete(headerNumberKey(hash)); err != nil {
 		log.Crit("Failed to delete hash to number mapping", "err", err)
@@ -403,70 +383,72 @@ func DeleteHeader(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // deleteHeaderWithoutNumber removes only the block header but does not remove
 // the hash to number mapping.
-func deleteHeaderWithoutNumber(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func deleteHeaderWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(headerKey(number, hash)); err != nil {
 		log.Crit("Failed to delete header", "err", err)
 	}
 }
 
-// isCanon is an internal utility method, to check whether the given number/hash
-// is part of the ancient (canon) set.
-func isCanon(reader xpsdb.AncientReader, number uint64, hash common.Hash) bool {
-	h, err := reader.Ancient(freezerHashTable, number)
-	if err != nil {
-		return false
-	}
-	return bytes.Equal(h, hash[:])
-}
-
 // ReadBodyRLP retrieves the block body (transactions and uncles) in RLP encoding.
-func ReadBodyRLP(db xpsdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+func ReadBodyRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	// First try to look up the data in ancient database. Extra hash
 	// comparison is necessary since ancient database only maintains
 	// the canonical data.
-	var data []byte
-	db.ReadAncients(func(reader xpsdb.AncientReader) error {
-		// Check if the data is in ancients
-		if isCanon(reader, number, hash) {
-			data, _ = reader.Ancient(freezerBodiesTable, number)
-			return nil
+	data, _ := db.Ancient(freezerBodiesTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
 		}
-		// If not, try reading from leveldb
-		data, _ = db.Get(blockBodyKey(number, hash))
-		return nil
-	})
-	return data
+	}
+	// Then try to look up the data in leveldb.
+	data, _ = db.Get(blockBodyKey(number, hash))
+	if len(data) > 0 {
+		return data
+	}
+	// In the background freezer is moving data from leveldb to flatten files.
+	// So during the first check for ancient db, the data is not yet in there,
+	// but when we reach into leveldb, the data was already moved. That would
+	// result in a not found error.
+	data, _ = db.Ancient(freezerBodiesTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
+		}
+	}
+	return nil // Can't find the data anywhere.
 }
 
 // ReadCanonicalBodyRLP retrieves the block body (transactions and uncles) for the canonical
 // block at number, in RLP encoding.
-func ReadCanonicalBodyRLP(db xpsdb.Reader, number uint64) rlp.RawValue {
-	var data []byte
-	db.ReadAncients(func(reader xpsdb.AncientReader) error {
-		data, _ = reader.Ancient(freezerBodiesTable, number)
-		if len(data) > 0 {
-			return nil
+func ReadCanonicalBodyRLP(db ethdb.Reader, number uint64) rlp.RawValue {
+	// If it's an ancient one, we don't need the canonical hash
+	data, _ := db.Ancient(freezerBodiesTable, number)
+	if len(data) == 0 {
+		// Need to get the hash
+		data, _ = db.Get(blockBodyKey(number, ReadCanonicalHash(db, number)))
+		// In the background freezer is moving data from leveldb to flatten files.
+		// So during the first check for ancient db, the data is not yet in there,
+		// but when we reach into leveldb, the data was already moved. That would
+		// result in a not found error.
+		if len(data) == 0 {
+			data, _ = db.Ancient(freezerBodiesTable, number)
 		}
-		// Block is not in ancients, read from leveldb by hash and number.
-		// Note: ReadCanonicalHash cannot be used here because it also
-		// calls ReadAncients internally.
-		hash, _ := db.Get(headerHashKey(number))
-		data, _ = db.Get(blockBodyKey(number, common.BytesToHash(hash)))
-		return nil
-	})
+	}
 	return data
 }
 
 // WriteBodyRLP stores an RLP encoded block body into the database.
-func WriteBodyRLP(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
+func WriteBodyRLP(db ethdb.KeyValueWriter, hash common.Hash, number uint64, rlp rlp.RawValue) {
 	if err := db.Put(blockBodyKey(number, hash), rlp); err != nil {
 		log.Crit("Failed to store block body", "err", err)
 	}
 }
 
 // HasBody verifies the existence of a block body corresponding to the hash.
-func HasBody(db xpsdb.Reader, hash common.Hash, number uint64) bool {
-	if isCanon(db, number, hash) {
+func HasBody(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
 		return true
 	}
 	if has, err := db.Has(blockBodyKey(number, hash)); !has || err != nil {
@@ -476,7 +458,7 @@ func HasBody(db xpsdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadBody retrieves the block body corresponding to the hash.
-func ReadBody(db xpsdb.Reader, hash common.Hash, number uint64) *types.Body {
+func ReadBody(db ethdb.Reader, hash common.Hash, number uint64) *types.Body {
 	data := ReadBodyRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
@@ -490,7 +472,7 @@ func ReadBody(db xpsdb.Reader, hash common.Hash, number uint64) *types.Body {
 }
 
 // WriteBody stores a block body into the database.
-func WriteBody(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) {
+func WriteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64, body *types.Body) {
 	data, err := rlp.EncodeToBytes(body)
 	if err != nil {
 		log.Crit("Failed to RLP encode body", "err", err)
@@ -499,30 +481,45 @@ func WriteBody(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, body *t
 }
 
 // DeleteBody removes all block body data associated with a hash.
-func DeleteBody(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeleteBody(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockBodyKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block body", "err", err)
 	}
 }
 
 // ReadTdRLP retrieves a block's total difficulty corresponding to the hash in RLP encoding.
-func ReadTdRLP(db xpsdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	var data []byte
-	db.ReadAncients(func(reader xpsdb.AncientReader) error {
-		// Check if the data is in ancients
-		if isCanon(reader, number, hash) {
-			data, _ = reader.Ancient(freezerDifficultyTable, number)
-			return nil
+func ReadTdRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	// First try to look up the data in ancient database. Extra hash
+	// comparison is necessary since ancient database only maintains
+	// the canonical data.
+	data, _ := db.Ancient(freezerDifficultyTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
 		}
-		// If not, try reading from leveldb
-		data, _ = db.Get(headerTDKey(number, hash))
-		return nil
-	})
-	return data
+	}
+	// Then try to look up the data in leveldb.
+	data, _ = db.Get(headerTDKey(number, hash))
+	if len(data) > 0 {
+		return data
+	}
+	// In the background freezer is moving data from leveldb to flatten files.
+	// So during the first check for ancient db, the data is not yet in there,
+	// but when we reach into leveldb, the data was already moved. That would
+	// result in a not found error.
+	data, _ = db.Ancient(freezerDifficultyTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
+		}
+	}
+	return nil // Can't find the data anywhere.
 }
 
 // ReadTd retrieves a block's total difficulty corresponding to the hash.
-func ReadTd(db xpsdb.Reader, hash common.Hash, number uint64) *big.Int {
+func ReadTd(db ethdb.Reader, hash common.Hash, number uint64) *big.Int {
 	data := ReadTdRLP(db, hash, number)
 	if len(data) == 0 {
 		return nil
@@ -536,7 +533,7 @@ func ReadTd(db xpsdb.Reader, hash common.Hash, number uint64) *big.Int {
 }
 
 // WriteTd stores the total difficulty of a block into the database.
-func WriteTd(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, td *big.Int) {
+func WriteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64, td *big.Int) {
 	data, err := rlp.EncodeToBytes(td)
 	if err != nil {
 		log.Crit("Failed to RLP encode block total difficulty", "err", err)
@@ -547,7 +544,7 @@ func WriteTd(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, td *big.I
 }
 
 // DeleteTd removes all block total difficulty data associated with a hash.
-func DeleteTd(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeleteTd(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(headerTDKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block total difficulty", "err", err)
 	}
@@ -555,8 +552,8 @@ func DeleteTd(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
 
 // HasReceipts verifies the existence of all the transaction receipts belonging
 // to a block.
-func HasReceipts(db xpsdb.Reader, hash common.Hash, number uint64) bool {
-	if isCanon(db, number, hash) {
+func HasReceipts(db ethdb.Reader, hash common.Hash, number uint64) bool {
+	if has, err := db.Ancient(freezerHashTable, number); err == nil && common.BytesToHash(has) == hash {
 		return true
 	}
 	if has, err := db.Has(blockReceiptsKey(number, hash)); !has || err != nil {
@@ -566,25 +563,40 @@ func HasReceipts(db xpsdb.Reader, hash common.Hash, number uint64) bool {
 }
 
 // ReadReceiptsRLP retrieves all the transaction receipts belonging to a block in RLP encoding.
-func ReadReceiptsRLP(db xpsdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
-	var data []byte
-	db.ReadAncients(func(reader xpsdb.AncientReader) error {
-		// Check if the data is in ancients
-		if isCanon(reader, number, hash) {
-			data, _ = reader.Ancient(freezerReceiptTable, number)
-			return nil
+func ReadReceiptsRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
+	// First try to look up the data in ancient database. Extra hash
+	// comparison is necessary since ancient database only maintains
+	// the canonical data.
+	data, _ := db.Ancient(freezerReceiptTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
 		}
-		// If not, try reading from leveldb
-		data, _ = db.Get(blockReceiptsKey(number, hash))
-		return nil
-	})
-	return data
+	}
+	// Then try to look up the data in leveldb.
+	data, _ = db.Get(blockReceiptsKey(number, hash))
+	if len(data) > 0 {
+		return data
+	}
+	// In the background freezer is moving data from leveldb to flatten files.
+	// So during the first check for ancient db, the data is not yet in there,
+	// but when we reach into leveldb, the data was already moved. That would
+	// result in a not found error.
+	data, _ = db.Ancient(freezerReceiptTable, number)
+	if len(data) > 0 {
+		h, _ := db.Ancient(freezerHashTable, number)
+		if common.BytesToHash(h) == hash {
+			return data
+		}
+	}
+	return nil // Can't find the data anywhere.
 }
 
 // ReadRawReceipts retrieves all the transaction receipts belonging to a block.
 // The receipt metadata fields are not guaranteed to be populated, so they
 // should not be used. Use ReadReceipts instead if the metadata is needed.
-func ReadRawReceipts(db xpsdb.Reader, hash common.Hash, number uint64) types.Receipts {
+func ReadRawReceipts(db ethdb.Reader, hash common.Hash, number uint64) types.Receipts {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
 	if len(data) == 0 {
@@ -610,7 +622,7 @@ func ReadRawReceipts(db xpsdb.Reader, hash common.Hash, number uint64) types.Rec
 // The current implementation populates these metadata fields by reading the receipts'
 // corresponding block body, so if the block body is not found it will return nil even
 // if the receipt itself is stored.
-func ReadReceipts(db xpsdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) types.Receipts {
+func ReadReceipts(db ethdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) types.Receipts {
 	// We're deriving many fields from the block body, retrieve beside the receipt
 	receipts := ReadRawReceipts(db, hash, number)
 	if receipts == nil {
@@ -629,7 +641,7 @@ func ReadReceipts(db xpsdb.Reader, hash common.Hash, number uint64, config *para
 }
 
 // WriteReceipts stores all the transaction receipts belonging to a block.
-func WriteReceipts(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, receipts types.Receipts) {
+func WriteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64, receipts types.Receipts) {
 	// Convert the receipts into their storage form and serialize them
 	storageReceipts := make([]*types.ReceiptForStorage, len(receipts))
 	for i, receipt := range receipts {
@@ -646,7 +658,7 @@ func WriteReceipts(db xpsdb.KeyValueWriter, hash common.Hash, number uint64, rec
 }
 
 // DeleteReceipts removes all receipt data associated with a block hash.
-func DeleteReceipts(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeleteReceipts(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	if err := db.Delete(blockReceiptsKey(number, hash)); err != nil {
 		log.Crit("Failed to delete block receipts", "err", err)
 	}
@@ -704,7 +716,7 @@ func deriveLogFields(receipts []*receiptLogs, hash common.Hash, number uint64, t
 // ReadLogs retrieves the logs for all transactions in a block. The log fields
 // are populated with metadata. In case the receipts or the block body
 // are not found, a nil is returned.
-func ReadLogs(db xpsdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
+func ReadLogs(db ethdb.Reader, hash common.Hash, number uint64) [][]*types.Log {
 	// Retrieve the flattened receipt slice
 	data := ReadReceiptsRLP(db, hash, number)
 	if len(data) == 0 {
@@ -712,11 +724,6 @@ func ReadLogs(db xpsdb.Reader, hash common.Hash, number uint64, config *params.C
 	}
 	receipts := []*receiptLogs{}
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
-		// Receipts might be in the legacy format, try decoding that.
-		// TODO: to be removed after users migrated
-		if logs := readLegacyLogs(db, hash, number, config); logs != nil {
-			return logs
-		}
 		log.Error("Invalid receipt array RLP", "hash", hash, "err", err)
 		return nil
 	}
@@ -737,28 +744,13 @@ func ReadLogs(db xpsdb.Reader, hash common.Hash, number uint64, config *params.C
 	return logs
 }
 
-// readLegacyLogs is a temporary workaround for when trying to read logs
-// from a block which has its receipt stored in the legacy format. It'll
-// be removed after users have migrated their freezer databases.
-func readLegacyLogs(db xpsdb.Reader, hash common.Hash, number uint64, config *params.ChainConfig) [][]*types.Log {
-	receipts := ReadReceipts(db, hash, number, config)
-	if receipts == nil {
-		return nil
-	}
-	logs := make([][]*types.Log, len(receipts))
-	for i, receipt := range receipts {
-		logs[i] = receipt.Logs
-	}
-	return logs
-}
-
 // ReadBlock retrieves an entire block corresponding to the hash, assembling it
 // back from the stored header and body. If either the header or body could not
 // be retrieved nil is returned.
 //
 // Note, due to concurrent download of header and block body the header and thus
 // canonical hash can be stored in the database but the body data not (yet).
-func ReadBlock(db xpsdb.Reader, hash common.Hash, number uint64) *types.Block {
+func ReadBlock(db ethdb.Reader, hash common.Hash, number uint64) *types.Block {
 	header := ReadHeader(db, hash, number)
 	if header == nil {
 		return nil
@@ -771,29 +763,37 @@ func ReadBlock(db xpsdb.Reader, hash common.Hash, number uint64) *types.Block {
 }
 
 // WriteBlock serializes a block into the database, header and body separately.
-func WriteBlock(db xpsdb.KeyValueWriter, block *types.Block) {
+func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 	WriteBody(db, block.Hash(), block.NumberU64(), block.Body())
 	WriteHeader(db, block.Header())
 }
 
-// WriteAncientBlocks writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db xpsdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, td *big.Int) (int64, error) {
+// WriteAncientBlock writes entire block data into ancient store and returns the total written size.
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, borReceipts []types.Receipts, td *big.Int) (int64, error) {
 	var (
-		tdSum      = new(big.Int).Set(td)
-		stReceipts []*types.ReceiptForStorage
+		tdSum         = new(big.Int).Set(td)
+		stReceipts    []*types.ReceiptForStorage
+		borStReceipts []*types.ReceiptForStorage
 	)
-	return db.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
 			// Convert receipts to storage format and sum up total difficulty.
 			stReceipts = stReceipts[:0]
 			for _, receipt := range receipts[i] {
 				stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
 			}
+
+			// Convert bor receipts to storage format and sum up total difficulty.
+			borStReceipts = borStReceipts[:0]
+			for _, borReceipt := range borReceipts[i] {
+				borStReceipts = append(borStReceipts, (*types.ReceiptForStorage)(borReceipt))
+			}
+
 			header := block.Header()
 			if i > 0 {
 				tdSum.Add(tdSum, header.Difficulty)
 			}
-			if err := writeAncientBlock(op, block, header, stReceipts, tdSum); err != nil {
+			if err := writeAncientBlock(op, block, header, stReceipts, borStReceipts, tdSum); err != nil {
 				return err
 			}
 		}
@@ -801,7 +801,7 @@ func WriteAncientBlocks(db xpsdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op xpsdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage, td *big.Int) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage, borReceipts []*types.ReceiptForStorage, td *big.Int) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
@@ -818,24 +818,33 @@ func writeAncientBlock(op xpsdb.AncientWriteOp, block *types.Block, header *type
 	if err := op.Append(freezerDifficultyTable, num, td); err != nil {
 		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
 	}
+	if err := op.Append(freezerBorReceiptTable, num, borReceipts); err != nil {
+		return fmt.Errorf("can't append block %d borReceipts: %v", num, err)
+	}
 	return nil
 }
 
 // DeleteBlock removes all block data associated with a hash.
-func DeleteBlock(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	DeleteHeader(db, hash, number)
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
+
+	// delete bor receipt
+	DeleteBorReceipt(db, hash, number)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
 // the hash to number mapping.
-func DeleteBlockWithoutNumber(db xpsdb.KeyValueWriter, hash common.Hash, number uint64) {
+func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteReceipts(db, hash, number)
 	deleteHeaderWithoutNumber(db, hash, number)
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
+
+	// delete bor receipt
+	DeleteBorReceipt(db, hash, number)
 }
 
 const badBlockToKeep = 10
@@ -856,7 +865,7 @@ func (s badBlockList) Less(i, j int) bool {
 func (s badBlockList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // ReadBadBlock retrieves the bad block with the corresponding block hash.
-func ReadBadBlock(db xpsdb.Reader, hash common.Hash) *types.Block {
+func ReadBadBlock(db ethdb.Reader, hash common.Hash) *types.Block {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		return nil
@@ -875,7 +884,7 @@ func ReadBadBlock(db xpsdb.Reader, hash common.Hash) *types.Block {
 
 // ReadAllBadBlocks retrieves all the bad blocks in the database.
 // All returned blocks are sorted in reverse order by number.
-func ReadAllBadBlocks(db xpsdb.Reader) []*types.Block {
+func ReadAllBadBlocks(db ethdb.Reader) []*types.Block {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		return nil
@@ -893,7 +902,7 @@ func ReadAllBadBlocks(db xpsdb.Reader) []*types.Block {
 
 // WriteBadBlock serializes the bad block into the database. If the cumulated
 // bad blocks exceeds the limitation, the oldest will be dropped.
-func WriteBadBlock(db xpsdb.KeyValueStore, block *types.Block) {
+func WriteBadBlock(db ethdb.KeyValueStore, block *types.Block) {
 	blob, err := db.Get(badBlockKey)
 	if err != nil {
 		log.Warn("Failed to load old bad blocks", "error", err)
@@ -928,14 +937,14 @@ func WriteBadBlock(db xpsdb.KeyValueStore, block *types.Block) {
 }
 
 // DeleteBadBlocks deletes all the bad blocks from the database
-func DeleteBadBlocks(db xpsdb.KeyValueWriter) {
+func DeleteBadBlocks(db ethdb.KeyValueWriter) {
 	if err := db.Delete(badBlockKey); err != nil {
 		log.Crit("Failed to delete bad blocks", "err", err)
 	}
 }
 
 // FindCommonAncestor returns the last common ancestor of two block headers
-func FindCommonAncestor(db xpsdb.Reader, a, b *types.Header) *types.Header {
+func FindCommonAncestor(db ethdb.Reader, a, b *types.Header) *types.Header {
 	for bn := b.Number.Uint64(); a.Number.Uint64() > bn; {
 		a = ReadHeader(db, a.ParentHash, a.Number.Uint64()-1)
 		if a == nil {
@@ -962,7 +971,7 @@ func FindCommonAncestor(db xpsdb.Reader, a, b *types.Header) *types.Header {
 }
 
 // ReadHeadHeader returns the current canonical head header.
-func ReadHeadHeader(db xpsdb.Reader) *types.Header {
+func ReadHeadHeader(db ethdb.Reader) *types.Header {
 	headHeaderHash := ReadHeadHeaderHash(db)
 	if headHeaderHash == (common.Hash{}) {
 		return nil
@@ -975,7 +984,7 @@ func ReadHeadHeader(db xpsdb.Reader) *types.Header {
 }
 
 // ReadHeadBlock returns the current canonical head block.
-func ReadHeadBlock(db xpsdb.Reader) *types.Block {
+func ReadHeadBlock(db ethdb.Reader) *types.Block {
 	headBlockHash := ReadHeadBlockHash(db)
 	if headBlockHash == (common.Hash{}) {
 		return nil

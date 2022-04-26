@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package runtime
 
@@ -24,21 +24,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/accounts/abi"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/asm"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/state"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xps/tracers"
-	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
-
-	// force-load js tracers to trigger registration
-	_ "github.com/xpaymentsorg/go-xpayments/xps/tracers/js"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/asm"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 func TestDefaults(t *testing.T) {
@@ -69,7 +65,7 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
-func TestXVM(t *testing.T) {
+func TestEVM(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
 			t.Fatalf("crashed with: %v", r)
@@ -161,7 +157,7 @@ func BenchmarkCall(b *testing.B) {
 		}
 	}
 }
-func benchmarkXVM_Create(bench *testing.B, code string) {
+func benchmarkEVM_Create(bench *testing.B, code string) {
 	var (
 		statedb, _ = state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
 		sender     = common.BytesToAddress([]byte("sender"))
@@ -189,7 +185,7 @@ func benchmarkXVM_Create(bench *testing.B, code string) {
 			EIP155Block:         new(big.Int),
 			EIP158Block:         new(big.Int),
 		},
-		XVMConfig: vm.Config{},
+		EVMConfig: vm.Config{},
 	}
 	// Warm up the intpools and stuff
 	bench.ResetTimer()
@@ -199,21 +195,21 @@ func benchmarkXVM_Create(bench *testing.B, code string) {
 	bench.StopTimer()
 }
 
-func BenchmarkXVM_CREATE_500(bench *testing.B) {
+func BenchmarkEVM_CREATE_500(bench *testing.B) {
 	// initcode size 500K, repeatedly calls CREATE and then modifies the mem contents
-	benchmarkXVM_Create(bench, "5b6207a120600080f0600152600056")
+	benchmarkEVM_Create(bench, "5b6207a120600080f0600152600056")
 }
-func BenchmarkXVM_CREATE2_500(bench *testing.B) {
+func BenchmarkEVM_CREATE2_500(bench *testing.B) {
 	// initcode size 500K, repeatedly calls CREATE2 and then modifies the mem contents
-	benchmarkXVM_Create(bench, "5b586207a120600080f5600152600056")
+	benchmarkEVM_Create(bench, "5b586207a120600080f5600152600056")
 }
-func BenchmarkXVM_CREATE_1200(bench *testing.B) {
+func BenchmarkEVM_CREATE_1200(bench *testing.B) {
 	// initcode size 1200K, repeatedly calls CREATE and then modifies the mem contents
-	benchmarkXVM_Create(bench, "5b62124f80600080f0600152600056")
+	benchmarkEVM_Create(bench, "5b62124f80600080f0600152600056")
 }
-func BenchmarkXVM_CREATE2_1200(bench *testing.B) {
+func BenchmarkEVM_CREATE2_1200(bench *testing.B) {
 	// initcode size 1200K, repeatedly calls CREATE2 and then modifies the mem contents
-	benchmarkXVM_Create(bench, "5b5862124f80600080f5600152600056")
+	benchmarkEVM_Create(bench, "5b5862124f80600080f5600152600056")
 }
 
 func fakeHeader(n uint64, parentHash common.Hash) *types.Header {
@@ -327,19 +323,19 @@ func TestBlockhash(t *testing.T) {
 }
 
 type stepCounter struct {
-	inner *logger.JSONLogger
+	inner *vm.JSONLogger
 	steps int
 }
 
-func (s *stepCounter) CaptureStart(env *vm.XVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
+func (s *stepCounter) CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 
-func (s *stepCounter) CaptureFault(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
+func (s *stepCounter) CaptureFault(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, depth int, err error) {
 }
 
 func (s *stepCounter) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
-func (s *stepCounter) CaptureState(pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+func (s *stepCounter) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
 	s.steps++
 	// Enable this for more output
 	//s.inner.CaptureState(env, pc, op, gas, cost, memory, stack, rStack, contract, depth, err)
@@ -357,7 +353,7 @@ func benchmarkNonModifyingCode(gas uint64, code []byte, name string, tracerCode 
 		if err != nil {
 			b.Fatal(err)
 		}
-		cfg.XVMConfig = vm.Config{
+		cfg.EVMConfig = vm.Config{
 			Debug:  true,
 			Tracer: tracer,
 		}
@@ -494,9 +490,9 @@ func BenchmarkSimpleLoop(b *testing.B) {
 		byte(vm.JUMP),
 	}
 
-	//tracer := logger.NewJSONLogger(nil, os.Stdout)
+	//tracer := vm.NewJSONLogger(nil, os.Stdout)
 	//Execute(loopingCode, nil, &Config{
-	//	XVMConfig: vm.Config{
+	//	EVMConfig: vm.Config{
 	//		Debug:  true,
 	//		Tracer: tracer,
 	//	}})
@@ -515,7 +511,7 @@ func BenchmarkSimpleLoop(b *testing.B) {
 // TestEip2929Cases contains various testcases that are used for
 // EIP-2929 about gas repricings
 func TestEip2929Cases(t *testing.T) {
-	t.Skip("Test only useful for generating documentation")
+
 	id := 1
 	prettyPrint := func(comment string, code []byte) {
 
@@ -535,9 +531,9 @@ func TestEip2929Cases(t *testing.T) {
 			comment,
 			code, ops)
 		Execute(code, nil, &Config{
-			XVMConfig: vm.Config{
+			EVMConfig: vm.Config{
 				Debug:     true,
-				Tracer:    logger.NewMarkdownLogger(nil, os.Stdout),
+				Tracer:    vm.NewMarkdownLogger(nil, os.Stdout),
 				ExtraEips: []int{2929},
 			},
 		})
@@ -626,7 +622,7 @@ func TestEip2929Cases(t *testing.T) {
 
 // TestColdAccountAccessCost test that the cold account access cost is reported
 // correctly
-// see: https://github.com/xpayments/go-xpayments/issues/22649
+// see: https://github.com/ethereum/go-ethereum/issues/22649
 func TestColdAccountAccessCost(t *testing.T) {
 	for i, tc := range []struct {
 		code []byte
@@ -687,9 +683,9 @@ func TestColdAccountAccessCost(t *testing.T) {
 			want: 7600,
 		},
 	} {
-		tracer := logger.NewStructLogger(nil)
+		tracer := vm.NewStructLogger(nil)
 		Execute(tc.code, nil, &Config{
-			XVMConfig: vm.Config{
+			EVMConfig: vm.Config{
 				Debug:  true,
 				Tracer: tracer,
 			},
@@ -860,7 +856,7 @@ func TestRuntimeJSTracer(t *testing.T) {
 			}
 			_, _, err = Call(main, nil, &Config{
 				State: statedb,
-				XVMConfig: vm.Config{
+				EVMConfig: vm.Config{
 					Debug:  true,
 					Tracer: tracer,
 				}})
@@ -895,7 +891,7 @@ func TestJSTracerCreateTx(t *testing.T) {
 	}
 	_, _, _, err = Create(code, &Config{
 		State: statedb,
-		XVMConfig: vm.Config{
+		EVMConfig: vm.Config{
 			Debug:  true,
 			Tracer: tracer,
 		}})

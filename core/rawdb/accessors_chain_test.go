@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rawdb
 
@@ -27,11 +27,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -470,7 +470,7 @@ func TestAncientStorage(t *testing.T) {
 	}
 
 	// Write and verify the header in the database
-	WriteAncientBlocks(db, []*types.Block{block}, []types.Receipts{nil}, big.NewInt(100))
+	WriteAncientBlocks(db, []*types.Block{block}, []types.Receipts{nil}, []types.Receipts{nil}, big.NewInt(100))
 
 	if blob := ReadHeaderRLP(db, hash, number); len(blob) == 0 {
 		t.Fatalf("no header returned")
@@ -609,7 +609,7 @@ func BenchmarkWriteAncientBlocks(b *testing.B) {
 
 		blocks := allBlocks[i : i+length]
 		receipts := batchReceipts[:length]
-		writeSize, err := WriteAncientBlocks(db, blocks, receipts, td)
+		writeSize, err := WriteAncientBlocks(db, blocks, receipts, []types.Receipts{nil}, td)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -744,7 +744,7 @@ func TestReadLogs(t *testing.T) {
 	// Insert the receipt slice into the database and check presence
 	WriteReceipts(db, hash, 0, receipts)
 
-	logs := ReadLogs(db, hash, 0, params.TestChainConfig)
+	logs := ReadLogs(db, hash, 0)
 	if len(logs) == 0 {
 		t.Fatalf("no logs returned")
 	}
@@ -882,68 +882,4 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 			}
 		}
 	})
-}
-
-func TestHeadersRLPStorage(t *testing.T) {
-	// Have N headers in the freezer
-	frdir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("failed to create temp freezer dir: %v", err)
-	}
-	defer os.Remove(frdir)
-
-	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
-	if err != nil {
-		t.Fatalf("failed to create database with ancient backend")
-	}
-	defer db.Close()
-	// Create blocks
-	var chain []*types.Block
-	var pHash common.Hash
-	for i := 0; i < 100; i++ {
-		block := types.NewBlockWithHeader(&types.Header{
-			Number:      big.NewInt(int64(i)),
-			Extra:       []byte("test block"),
-			UncleHash:   types.EmptyUncleHash,
-			TxHash:      types.EmptyRootHash,
-			ReceiptHash: types.EmptyRootHash,
-			ParentHash:  pHash,
-		})
-		chain = append(chain, block)
-		pHash = block.Hash()
-	}
-	var receipts []types.Receipts = make([]types.Receipts, 100)
-	// Write first half to ancients
-	WriteAncientBlocks(db, chain[:50], receipts[:50], big.NewInt(100))
-	// Write second half to db
-	for i := 50; i < 100; i++ {
-		WriteCanonicalHash(db, chain[i].Hash(), chain[i].NumberU64())
-		WriteBlock(db, chain[i])
-	}
-	checkSequence := func(from, amount int) {
-		headersRlp := ReadHeaderRange(db, uint64(from), uint64(amount))
-		if have, want := len(headersRlp), amount; have != want {
-			t.Fatalf("have %d headers, want %d", have, want)
-		}
-		for i, headerRlp := range headersRlp {
-			var header types.Header
-			if err := rlp.DecodeBytes(headerRlp, &header); err != nil {
-				t.Fatal(err)
-			}
-			if have, want := header.Number.Uint64(), uint64(from-i); have != want {
-				t.Fatalf("wrong number, have %d want %d", have, want)
-			}
-		}
-	}
-	checkSequence(99, 20)  // Latest block and 19 parents
-	checkSequence(99, 50)  // Latest block -> all db blocks
-	checkSequence(99, 51)  // Latest block -> one from ancients
-	checkSequence(99, 52)  // Latest blocks -> two from ancients
-	checkSequence(50, 2)   // One from db, one from ancients
-	checkSequence(49, 1)   // One from ancients
-	checkSequence(49, 50)  // All ancient ones
-	checkSequence(99, 100) // All blocks
-	checkSequence(0, 1)    // Only genesis
-	checkSequence(1, 1)    // Only block 1
-	checkSequence(1, 2)    // Genesis + block 1
 }

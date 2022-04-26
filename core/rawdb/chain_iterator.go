@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rawdb
 
@@ -21,18 +21,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/common/prque"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/prque"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // InitDatabaseFromFreezer reinitializes an empty database from a previous batch
 // of frozen ancient blocks. The method iterates over all the frozen blocks and
 // injects into the database the block hash->number mappings.
-func InitDatabaseFromFreezer(db xpsdb.Database) {
+func InitDatabaseFromFreezer(db ethdb.Database) {
 	// If we can't access the freezer or it's empty, abort
 	frozen, err := db.Ancients()
 	if err != nil || frozen == 0 {
@@ -44,29 +44,24 @@ func InitDatabaseFromFreezer(db xpsdb.Database) {
 		logged = start.Add(-7 * time.Second) // Unindex during import is fast, don't double log
 		hash   common.Hash
 	)
-	for i := uint64(0); i < frozen; {
-		// We read 100K hashes at a time, for a total of 3.2M
-		count := uint64(100_000)
-		if i+count > frozen {
-			count = frozen - i
-		}
-		data, err := db.AncientRange(freezerHashTable, i, count, 32*count)
-		if err != nil {
+	for i := uint64(0); i < frozen; i++ {
+		// Since the freezer has all data in sequential order on a file,
+		// it would be 'neat' to read more data in one go, and let the
+		// freezerdb return N items (e.g up to 1000 items per go)
+		// That would require an API change in Ancients though
+		if h, err := db.Ancient(freezerHashTable, i); err != nil {
 			log.Crit("Failed to init database from freezer", "err", err)
-		}
-		for j, h := range data {
-			number := i + uint64(j)
+		} else {
 			hash = common.BytesToHash(h)
-			WriteHeaderNumber(batch, hash, number)
-			// If enough data was accumulated in memory or we're at the last block, dump to disk
-			if batch.ValueSize() > xpsdb.IdealBatchSize {
-				if err := batch.Write(); err != nil {
-					log.Crit("Failed to write data to db", "err", err)
-				}
-				batch.Reset()
-			}
 		}
-		i += uint64(len(data))
+		WriteHeaderNumber(batch, hash, i)
+		// If enough data was accumulated in memory or we're at the last block, dump to disk
+		if batch.ValueSize() > ethdb.IdealBatchSize {
+			if err := batch.Write(); err != nil {
+				log.Crit("Failed to write data to db", "err", err)
+			}
+			batch.Reset()
+		}
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
 			log.Info("Initializing database from freezer", "total", frozen, "number", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
@@ -92,7 +87,7 @@ type blockTxHashes struct {
 // number(s) given, and yields the hashes on a channel. If there is a signal
 // received from interrupt channel, the iteration will be aborted and result
 // channel will be closed.
-func iterateTransactions(db xpsdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
+func iterateTransactions(db ethdb.Database, from uint64, to uint64, reverse bool, interrupt chan struct{}) chan *blockTxHashes {
 	// One thread sequentially reads data from db
 	type numberRlp struct {
 		number uint64
@@ -177,7 +172,7 @@ func iterateTransactions(db xpsdb.Database, from uint64, to uint64, reverse bool
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func indexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+func indexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	// short circuit for invalid range
 	if from >= to {
 		return
@@ -216,7 +211,7 @@ func indexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan
 			blocks++
 			txs += len(delivery.hashes)
 			// If enough data was accumulated in memory or we're at the last block, dump to disk
-			if batch.ValueSize() > xpsdb.IdealBatchSize {
+			if batch.ValueSize() > ethdb.IdealBatchSize {
 				WriteTxIndexTail(batch, lastNum) // Also write the tail here
 				if err := batch.Write(); err != nil {
 					log.Crit("Failed writing batch to db", "error", err)
@@ -247,8 +242,7 @@ func indexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan
 	}
 }
 
-// IndexTransactions creates txlookup indices of the specified block range. The from
-// is included while to is excluded.
+// IndexTransactions creates txlookup indices of the specified block range.
 //
 // This function iterates canonical chain in reverse order, it has one main advantage:
 // We can write tx index tail flag periodically even without the whole indexing
@@ -256,12 +250,12 @@ func indexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func IndexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+func IndexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
 	indexTransactions(db, from, to, interrupt, nil)
 }
 
 // indexTransactionsForTesting is the internal debug version with an additional hook.
-func indexTransactionsForTesting(db xpsdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+func indexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	indexTransactions(db, from, to, interrupt, hook)
 }
 
@@ -269,7 +263,7 @@ func indexTransactionsForTesting(db xpsdb.Database, from uint64, to uint64, inte
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func unindexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+func unindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	// short circuit for invalid range
 	if from >= to {
 		return
@@ -340,15 +334,14 @@ func unindexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt ch
 }
 
 // UnindexTransactions removes txlookup indices of the specified block range.
-// The from is included while to is excluded.
 //
 // There is a passed channel, the whole procedure will be interrupted if any
 // signal received.
-func UnindexTransactions(db xpsdb.Database, from uint64, to uint64, interrupt chan struct{}) {
+func UnindexTransactions(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}) {
 	unindexTransactions(db, from, to, interrupt, nil)
 }
 
 // unindexTransactionsForTesting is the internal debug version with an additional hook.
-func unindexTransactionsForTesting(db xpsdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
+func unindexTransactionsForTesting(db ethdb.Database, from uint64, to uint64, interrupt chan struct{}, hook func(uint64) bool) {
 	unindexTransactions(db, from, to, interrupt, hook)
 }

@@ -1,38 +1,31 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package core
 
 import (
-	"encoding/json"
-	"math/big"
 	"runtime"
 	"testing"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/beacon"
-	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
-	"github.com/xpaymentsorg/go-xpayments/consensus/xpsash"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // Tests that simple header verification works, for both good and bad blocks.
@@ -42,14 +35,14 @@ func TestHeaderVerification(t *testing.T) {
 		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.TestChainConfig, genesis, xpsash.NewFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
 		headers[i] = block.Header()
 	}
 	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFaker(), vm.Config{}, nil, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	for i := 0; i < len(blocks); i++ {
@@ -57,10 +50,10 @@ func TestHeaderVerification(t *testing.T) {
 			var results <-chan error
 
 			if valid {
-				engine := xpsash.NewFaker()
+				engine := ethash.NewFaker()
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			} else {
-				engine := xpsash.NewFakeFailer(headers[i].Number.Uint64())
+				engine := ethash.NewFakeFailer(headers[i].Number.Uint64())
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
 			}
 			// Wait for the verification result
@@ -83,172 +76,6 @@ func TestHeaderVerification(t *testing.T) {
 	}
 }
 
-func TestHeaderVerificationForMergingClique(t *testing.T) { testHeaderVerificationForMerging(t, true) }
-func TestHeaderVerificationForMergingEthash(t *testing.T) { testHeaderVerificationForMerging(t, false) }
-
-// Tests the verification for xps1/2 merging, including pre-merge and post-merge
-func testHeaderVerificationForMerging(t *testing.T, isClique bool) {
-	var (
-		testdb      = rawdb.NewMemoryDatabase()
-		preBlocks   []*types.Block
-		postBlocks  []*types.Block
-		runEngine   consensus.Engine
-		chainConfig *params.ChainConfig
-		merger      = consensus.NewMerger(rawdb.NewMemoryDatabase())
-	)
-	if isClique {
-		var (
-			key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-			addr   = crypto.PubkeyToAddress(key.PublicKey)
-			engine = clique.New(params.AllCliqueProtocolChanges.Clique, testdb)
-		)
-		genspec := &Genesis{
-			ExtraData: make([]byte, 32+common.AddressLength+crypto.SignatureLength),
-			Alloc: map[common.Address]GenesisAccount{
-				addr: {Balance: big.NewInt(1)},
-			},
-			BaseFee: big.NewInt(params.InitialBaseFee),
-		}
-		copy(genspec.ExtraData[32:], addr[:])
-		genesis := genspec.MustCommit(testdb)
-
-		genEngine := beacon.New(engine)
-		preBlocks, _ = GenerateChain(params.AllCliqueProtocolChanges, genesis, genEngine, testdb, 8, nil)
-		td := 0
-		for i, block := range preBlocks {
-			header := block.Header()
-			if i > 0 {
-				header.ParentHash = preBlocks[i-1].Hash()
-			}
-			header.Extra = make([]byte, 32+crypto.SignatureLength)
-			header.Difficulty = big.NewInt(2)
-
-			sig, _ := crypto.Sign(genEngine.SealHash(header).Bytes(), key)
-			copy(header.Extra[len(header.Extra)-crypto.SignatureLength:], sig)
-			preBlocks[i] = block.WithSeal(header)
-			// calculate td
-			td += int(block.Difficulty().Uint64())
-		}
-		config := *params.AllCliqueProtocolChanges
-		config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(&config, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
-		chainConfig = &config
-		runEngine = beacon.New(engine)
-	} else {
-		gspec := &Genesis{Config: params.TestChainConfig}
-		genesis := gspec.MustCommit(testdb)
-		genEngine := beacon.New(xpsash.NewFaker())
-
-		preBlocks, _ = GenerateChain(params.TestChainConfig, genesis, genEngine, testdb, 8, nil)
-		td := 0
-		for _, block := range preBlocks {
-			// calculate td
-			td += int(block.Difficulty().Uint64())
-		}
-		config := *params.TestChainConfig
-		config.TerminalTotalDifficulty = big.NewInt(int64(td))
-		postBlocks, _ = GenerateChain(params.TestChainConfig, preBlocks[len(preBlocks)-1], genEngine, testdb, 8, nil)
-
-		chainConfig = &config
-		runEngine = beacon.New(xpsash.NewFaker())
-	}
-
-	preHeaders := make([]*types.Header, len(preBlocks))
-	for i, block := range preBlocks {
-		preHeaders[i] = block.Header()
-
-		blob, _ := json.Marshal(block.Header())
-		t.Logf("Log header before the merging %d: %v", block.NumberU64(), string(blob))
-	}
-	postHeaders := make([]*types.Header, len(postBlocks))
-	for i, block := range postBlocks {
-		postHeaders[i] = block.Header()
-
-		blob, _ := json.Marshal(block.Header())
-		t.Logf("Log header after the merging %d: %v", block.NumberU64(), string(blob))
-	}
-	// Run the header checker for blocks one-by-one, checking for both valid and invalid nonces
-	chain, _ := NewBlockChain(testdb, nil, chainConfig, runEngine, vm.Config{}, nil, nil)
-	defer chain.Stop()
-
-	// Verify the blocks before the merging
-	for i := 0; i < len(preBlocks); i++ {
-		_, results := runEngine.VerifyHeaders(chain, []*types.Header{preHeaders[i]}, []bool{true})
-		// Wait for the verification result
-		select {
-		case result := <-results:
-			if result != nil {
-				t.Errorf("test %d: verification failed %v", i, result)
-			}
-		case <-time.After(time.Second):
-			t.Fatalf("test %d: verification timeout", i)
-		}
-		// Make sure no more data is returned
-		select {
-		case result := <-results:
-			t.Fatalf("test %d: unexpected result returned: %v", i, result)
-		case <-time.After(25 * time.Millisecond):
-		}
-		chain.InsertChain(preBlocks[i : i+1])
-	}
-
-	// Make the transition
-	merger.ReachTTD()
-	merger.FinalizePoS()
-
-	// Verify the blocks after the merging
-	for i := 0; i < len(postBlocks); i++ {
-		_, results := runEngine.VerifyHeaders(chain, []*types.Header{postHeaders[i]}, []bool{true})
-		// Wait for the verification result
-		select {
-		case result := <-results:
-			if result != nil {
-				t.Errorf("test %d: verification failed %v", i, result)
-			}
-		case <-time.After(time.Second):
-			t.Fatalf("test %d: verification timeout", i)
-		}
-		// Make sure no more data is returned
-		select {
-		case result := <-results:
-			t.Fatalf("test %d: unexpected result returned: %v", i, result)
-		case <-time.After(25 * time.Millisecond):
-		}
-		chain.InsertBlockWithoutSetHead(postBlocks[i])
-	}
-
-	// Verify the blocks with pre-merge blocks and post-merge blocks
-	var (
-		headers []*types.Header
-		seals   []bool
-	)
-	for _, block := range preBlocks {
-		headers = append(headers, block.Header())
-		seals = append(seals, true)
-	}
-	for _, block := range postBlocks {
-		headers = append(headers, block.Header())
-		seals = append(seals, true)
-	}
-	_, results := runEngine.VerifyHeaders(chain, headers, seals)
-	for i := 0; i < len(headers); i++ {
-		select {
-		case result := <-results:
-			if result != nil {
-				t.Errorf("test %d: verification failed %v", i, result)
-			}
-		case <-time.After(time.Second):
-			t.Fatalf("test %d: verification timeout", i)
-		}
-	}
-	// Make sure no more data is returned
-	select {
-	case result := <-results:
-		t.Fatalf("unexpected result returned: %v", result)
-	case <-time.After(25 * time.Millisecond):
-	}
-}
-
 // Tests that concurrent header verification works, for both good and bad blocks.
 func TestHeaderConcurrentVerification2(t *testing.T)  { testHeaderConcurrentVerification(t, 2) }
 func TestHeaderConcurrentVerification8(t *testing.T)  { testHeaderConcurrentVerification(t, 8) }
@@ -260,7 +87,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.TestChainConfig, genesis, xpsash.NewFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
@@ -279,11 +106,11 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		var results <-chan error
 
 		if valid {
-			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFaker(), vm.Config{}, nil, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFaker(), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		} else {
-			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
+			chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeFailer(uint64(len(headers)-1)), vm.Config{}, nil, nil)
 			_, results = chain.engine.VerifyHeaders(chain, headers, seals)
 			chain.Stop()
 		}
@@ -332,7 +159,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 		testdb    = rawdb.NewMemoryDatabase()
 		gspec     = &Genesis{Config: params.TestChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.TestChainConfig, genesis, xpsash.NewFaker(), testdb, 1024, nil)
+		blocks, _ = GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), testdb, 1024, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
@@ -346,7 +173,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	defer runtime.GOMAXPROCS(old)
 
 	// Start the verifications and immediately abort
-	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, xpsash.NewFakeDelayer(time.Millisecond), vm.Config{}, nil, nil)
+	chain, _ := NewBlockChain(testdb, nil, params.TestChainConfig, ethash.NewFakeDelayer(time.Millisecond), vm.Config{}, nil, nil)
 	defer chain.Stop()
 
 	abort, results := chain.engine.VerifyHeaders(chain, headers, seals)

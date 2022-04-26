@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package tests
 
@@ -20,18 +20,10 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"math/big"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/xps/tracers/logger"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 func TestState(t *testing.T) {
@@ -68,7 +60,6 @@ func TestState(t *testing.T) {
 	for _, dir := range []string{
 		stateTestDir,
 		legacyStateTestDir,
-		benchmarksDir,
 	} {
 		st.walk(t, dir, func(t *testing.T, name string, test *StateTest) {
 			for _, subtest := range test.Subtests() {
@@ -119,12 +110,12 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	// Test failed, re-run with tracing enabled.
 	t.Error(err)
 	if gasLimit > traceErrorLimit {
-		t.Log("gas limit too high for XVM trace")
+		t.Log("gas limit too high for EVM trace")
 		return
 	}
 	buf := new(bytes.Buffer)
 	w := bufio.NewWriter(buf)
-	tracer := logger.NewJSONLogger(&logger.Config{}, w)
+	tracer := vm.NewJSONLogger(&vm.LogConfig{}, w)
 	config.Debug, config.Tracer = true, tracer
 	err2 := test(config)
 	if !reflect.DeepEqual(err, err2) {
@@ -132,123 +123,10 @@ func withTrace(t *testing.T, gasLimit uint64, test func(vm.Config) error) {
 	}
 	w.Flush()
 	if buf.Len() == 0 {
-		t.Log("no XVM operation logs generated")
+		t.Log("no EVM operation logs generated")
 	} else {
-		t.Log("XVM operation log:\n" + buf.String())
+		t.Log("EVM operation log:\n" + buf.String())
 	}
-	// t.Logf("XVM output: 0x%x", tracer.Output())
-	// t.Logf("XVM error: %v", tracer.Error())
-}
-
-func BenchmarkXVM(b *testing.B) {
-	// Walk the directory.
-	dir := benchmarksDir
-	dirinfo, err := os.Stat(dir)
-	if os.IsNotExist(err) || !dirinfo.IsDir() {
-		fmt.Fprintf(os.Stderr, "can't find test files in %s, did you clone the xvm-benchmarks submodule?\n", dir)
-		b.Skip("missing test files")
-	}
-	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if info.IsDir() {
-			return nil
-		}
-		if ext := filepath.Ext(path); ext == ".json" {
-			name := filepath.ToSlash(strings.TrimPrefix(strings.TrimSuffix(path, ext), dir+string(filepath.Separator)))
-			b.Run(name, func(b *testing.B) { runBenchmarkFile(b, path) })
-		}
-		return nil
-	})
-	if err != nil {
-		b.Fatal(err)
-	}
-}
-
-func runBenchmarkFile(b *testing.B, path string) {
-	m := make(map[string]StateTest)
-	if err := readJSONFile(path, &m); err != nil {
-		b.Fatal(err)
-		return
-	}
-	if len(m) != 1 {
-		b.Fatal("expected single benchmark in a file")
-		return
-	}
-	for _, t := range m {
-		runBenchmark(b, &t)
-	}
-}
-
-func runBenchmark(b *testing.B, t *StateTest) {
-	for _, subtest := range t.Subtests() {
-		subtest := subtest
-		key := fmt.Sprintf("%s/%d", subtest.Fork, subtest.Index)
-
-		b.Run(key, func(b *testing.B) {
-			vmconfig := vm.Config{}
-
-			config, eips, err := GetChainConfig(subtest.Fork)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-			vmconfig.ExtraEips = eips
-			block := t.genesis(config).ToBlock(nil)
-			_, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, false)
-
-			var baseFee *big.Int
-			if config.IsLondon(new(big.Int)) {
-				baseFee = t.json.Env.BaseFee
-				if baseFee == nil {
-					// Retestxps uses `0x10` for genesis baseFee. Therefore, it defaults to
-					// parent - 2 : 0xa as the basefee for 'this' context.
-					baseFee = big.NewInt(0x0a)
-				}
-			}
-			post := t.json.Post[subtest.Fork][subtest.Index]
-			msg, err := t.json.Tx.toMessage(post, baseFee)
-			if err != nil {
-				b.Error(err)
-				return
-			}
-
-			// Try to recover tx with current signer
-			if len(post.TxBytes) != 0 {
-				var ttx types.Transaction
-				err := ttx.UnmarshalBinary(post.TxBytes)
-				if err != nil {
-					b.Error(err)
-					return
-				}
-
-				if _, err := types.Sender(types.LatestSigner(config), &ttx); err != nil {
-					b.Error(err)
-					return
-				}
-			}
-
-			// Prepare the XVM.
-			txContext := core.NewXVMTxContext(msg)
-			context := core.NewXVMBlockContext(block.Header(), nil, &t.json.Env.Coinbase)
-			context.GetHash = vmTestBlockHash
-			context.BaseFee = baseFee
-			xvm := vm.NewXVM(context, txContext, statedb, config, vmconfig)
-
-			// Create "contract" for sender to cache code analysis.
-			sender := vm.NewContract(vm.AccountRef(msg.From()), vm.AccountRef(msg.From()),
-				nil, 0)
-
-			b.ResetTimer()
-			for n := 0; n < b.N; n++ {
-				// Execute the message.
-				snapshot := statedb.Snapshot()
-				_, _, err = xvm.Call(sender, *msg.To(), msg.Data(), msg.Gas(), msg.Value())
-				if err != nil {
-					b.Error(err)
-					return
-				}
-				statedb.RevertToSnapshot(snapshot)
-			}
-
-		})
-	}
+	// t.Logf("EVM output: 0x%x", tracer.Output())
+	// t.Logf("EVM error: %v", tracer.Error())
 }

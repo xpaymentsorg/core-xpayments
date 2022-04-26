@@ -1,35 +1,38 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// package web3ext contains gpay specific web3.js extensions.
+// package web3ext contains geth specific web3.js extensions.
 package web3ext
 
 var Modules = map[string]string{
 	"admin":    AdminJs,
 	"clique":   CliqueJs,
-	"xpsash":   XpsashJs,
+	"ethash":   EthashJs,
 	"debug":    DebugJs,
-	"xps":      XpsJs,
+	"eth":      EthJs,
 	"miner":    MinerJs,
 	"net":      NetJs,
 	"personal": PersonalJs,
 	"rpc":      RpcJs,
 	"txpool":   TxpoolJs,
-	"lxs":      LXSJs,
+	"les":      LESJs,
 	"vflux":    VfluxJs,
+
+	// Bor related apis
+	"bor": BorJs,
 }
 
 const CliqueJs = `
@@ -89,28 +92,28 @@ web3._extend({
 });
 `
 
-const XpsashJs = `
+const EthashJs = `
 web3._extend({
-	property: 'xpsash',
+	property: 'ethash',
 	methods: [
 		new web3._extend.Method({
 			name: 'getWork',
-			call: 'xpsash_getWork',
+			call: 'ethash_getWork',
 			params: 0
 		}),
 		new web3._extend.Method({
 			name: 'getHashrate',
-			call: 'xpsash_getHashrate',
+			call: 'ethash_getHashrate',
 			params: 0
 		}),
 		new web3._extend.Method({
 			name: 'submitWork',
-			call: 'xpsash_submitWork',
+			call: 'ethash_submitWork',
 			params: 3,
 		}),
 		new web3._extend.Method({
 			name: 'submitHashrate',
-			call: 'xpsash_submitHashrate',
+			call: 'ethash_submitHashrate',
 			params: 2,
 		}),
 	]
@@ -476,116 +479,116 @@ web3._extend({
 });
 `
 
-const XpsJs = `
+const EthJs = `
 web3._extend({
-	property: 'xps',
+	property: 'eth',
 	methods: [
 		new web3._extend.Method({
+			name: 'getTransactionReceiptsByBlock',
+			call: 'eth_getTransactionReceiptsByBlock',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'chainId',
-			call: 'xps_chainId',
+			call: 'eth_chainId',
 			params: 0
 		}),
 		new web3._extend.Method({
 			name: 'sign',
-			call: 'xps_sign',
+			call: 'eth_sign',
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null]
 		}),
 		new web3._extend.Method({
 			name: 'resend',
-			call: 'xps_resend',
+			call: 'eth_resend',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, web3._extend.utils.fromDecimal, web3._extend.utils.fromDecimal]
 		}),
 		new web3._extend.Method({
 			name: 'signTransaction',
-			call: 'xps_signTransaction',
+			call: 'eth_signTransaction',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'estimateGas',
-			call: 'xps_estimateGas',
+			call: 'eth_estimateGas',
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputCallFormatter, web3._extend.formatters.inputBlockNumberFormatter],
 			outputFormatter: web3._extend.utils.toDecimal
 		}),
 		new web3._extend.Method({
 			name: 'submitTransaction',
-			call: 'xps_submitTransaction',
+			call: 'eth_submitTransaction',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'fillTransaction',
-			call: 'xps_fillTransaction',
+			call: 'eth_fillTransaction',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'getHeaderByNumber',
-			call: 'xps_getHeaderByNumber',
+			call: 'eth_getHeaderByNumber',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'getHeaderByHash',
-			call: 'xps_getHeaderByHash',
+			call: 'eth_getHeaderByHash',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'getBlockByNumber',
-			call: 'xps_getBlockByNumber',
+			call: 'eth_getBlockByNumber',
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, function (val) { return !!val; }]
 		}),
 		new web3._extend.Method({
 			name: 'getBlockByHash',
-			call: 'xps_getBlockByHash',
+			call: 'eth_getBlockByHash',
 			params: 2,
 			inputFormatter: [null, function (val) { return !!val; }]
 		}),
 		new web3._extend.Method({
 			name: 'getRawTransaction',
-			call: 'xps_getRawTransactionByHash',
+			call: 'eth_getRawTransactionByHash',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'getRawTransactionFromBlock',
 			call: function(args) {
-				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'xps_getRawTransactionByBlockHashAndIndex' : 'xps_getRawTransactionByBlockNumberAndIndex';
+				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getRawTransactionByBlockHashAndIndex' : 'eth_getRawTransactionByBlockNumberAndIndex';
 			},
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, web3._extend.utils.toHex]
 		}),
 		new web3._extend.Method({
 			name: 'getProof',
-			call: 'xps_getProof',
+			call: 'eth_getProof',
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		new web3._extend.Method({
 			name: 'createAccessList',
-			call: 'xps_createAccessList',
+			call: 'eth_createAccessList',
 			params: 2,
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter],
 		}),
 		new web3._extend.Method({
 			name: 'feeHistory',
-			call: 'xps_feeHistory',
+			call: 'eth_feeHistory',
 			params: 3,
 			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter, null]
-		}),
-		new web3._extend.Method({
-			name: 'getLogs',
-			call: 'xps_getLogs',
-			params: 1,
 		}),
 	],
 	properties: [
 		new web3._extend.Property({
 			name: 'pendingTransactions',
-			getter: 'xps_pendingTransactions',
+			getter: 'eth_pendingTransactions',
 			outputFormatter: function(txs) {
 				var formatted = [];
 				for (var i = 0; i < txs.length; i++) {
@@ -597,7 +600,7 @@ web3._extend({
 		}),
 		new web3._extend.Property({
 			name: 'maxPriorityFeePerGas',
-			getter: 'xps_maxPriorityFeePerGas',
+			getter: 'eth_maxPriorityFeePerGas',
 			outputFormatter: web3._extend.utils.toBigNumber
 		}),
 	]
@@ -619,8 +622,8 @@ web3._extend({
 			call: 'miner_stop'
 		}),
 		new web3._extend.Method({
-			name: 'setXpserbase',
-			call: 'miner_setXpserbase',
+			name: 'setEtherbase',
+			call: 'miner_setEtherbase',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
@@ -769,39 +772,39 @@ web3._extend({
 });
 `
 
-const LXSJs = `
+const LESJs = `
 web3._extend({
-	property: 'lxs',
+	property: 'les',
 	methods:
 	[
 		new web3._extend.Method({
 			name: 'getCheckpoint',
-			call: 'lxs_getCheckpoint',
+			call: 'les_getCheckpoint',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'clientInfo',
-			call: 'lxs_clientInfo',
+			call: 'les_clientInfo',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'priorityClientInfo',
-			call: 'lxs_priorityClientInfo',
+			call: 'les_priorityClientInfo',
 			params: 3
 		}),
 		new web3._extend.Method({
 			name: 'setClientParams',
-			call: 'lxs_setClientParams',
+			call: 'les_setClientParams',
 			params: 2
 		}),
 		new web3._extend.Method({
 			name: 'setDefaultParams',
-			call: 'lxs_setDefaultParams',
+			call: 'les_setDefaultParams',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'addBalance',
-			call: 'lxs_addBalance',
+			call: 'les_addBalance',
 			params: 2
 		}),
 	],
@@ -809,15 +812,15 @@ web3._extend({
 	[
 		new web3._extend.Property({
 			name: 'latestCheckpoint',
-			getter: 'lxs_latestCheckpoint'
+			getter: 'les_latestCheckpoint'
 		}),
 		new web3._extend.Property({
 			name: 'checkpointContractAddress',
-			getter: 'lxs_getCheckpointContractAddress'
+			getter: 'les_getCheckpointContractAddress'
 		}),
 		new web3._extend.Property({
 			name: 'serverInfo',
-			getter: 'lxs_serverInfo'
+			getter: 'les_serverInfo'
 		}),
 	]
 });

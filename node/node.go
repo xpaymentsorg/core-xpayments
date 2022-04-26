@@ -1,23 +1,22 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package node
 
 import (
-	crand "crypto/rand"
 	"errors"
 	"fmt"
 	"net/http"
@@ -27,16 +26,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/prometheus/tsdb/fileutil"
-	"github.com/xpaymentsorg/go-xpayments/accounts"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/event"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 // Node is a container on which services can be registered.
@@ -58,8 +55,6 @@ type Node struct {
 	rpcAPIs       []rpc.API   // List of APIs currently provided by the node
 	http          *httpServer //
 	ws            *httpServer //
-	httpAuth      *httpServer //
-	wsAuth        *httpServer //
 	ipc           *ipcServer  // Stores information about the ipc http server
 	inprocHandler *rpc.Server // In-process RPC request handler to process the API requests
 
@@ -124,7 +119,7 @@ func New(conf *Config) (*Node, error) {
 	}
 	node.keyDir = keyDir
 	node.keyDirTemp = isEphem
-	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/gpay)
+	// Creates an empty AccountManager with no backends. Callers (e.g. cmd/geth)
 	// are required to add the backends later on.
 	node.accman = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: conf.InsecureUnlockAllowed})
 
@@ -152,9 +147,7 @@ func New(conf *Config) (*Node, error) {
 
 	// Configure RPC servers.
 	node.http = newHTTPServer(node.log, conf.HTTPTimeouts)
-	node.httpAuth = newHTTPServer(node.log, conf.HTTPTimeouts)
 	node.ws = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
-	node.wsAuth = newHTTPServer(node.log, rpc.DefaultHTTPTimeouts)
 	node.ipc = newIPCServer(node.log, conf.IPCEndpoint())
 
 	return node, nil
@@ -342,41 +335,7 @@ func (n *Node) closeDataDir() {
 	}
 }
 
-// obtainJWTSecret loads the jwt-secret, either from the provided config,
-// or from the default location. If neither of those are present, it generates
-// a new secret and stores to the default location.
-func (n *Node) obtainJWTSecret(cliParam string) ([]byte, error) {
-	fileName := cliParam
-	if len(fileName) == 0 {
-		// no path provided, use default
-		fileName = n.ResolvePath(datadirJWTKey)
-	}
-	// try reading from file
-	log.Debug("Reading JWT secret", "path", fileName)
-	if data, err := os.ReadFile(fileName); err == nil {
-		jwtSecret := common.FromHex(strings.TrimSpace(string(data)))
-		if len(jwtSecret) == 32 {
-			return jwtSecret, nil
-		}
-		log.Error("Invalid JWT secret", "path", fileName, "length", len(jwtSecret))
-		return nil, errors.New("invalid JWT secret")
-	}
-	// Need to generate one
-	jwtSecret := make([]byte, 32)
-	crand.Read(jwtSecret)
-	// if we're in --dev mode, don't bother saving, just show it
-	if fileName == "" {
-		log.Info("Generated ephemeral JWT secret", "secret", hexutil.Encode(jwtSecret))
-		return jwtSecret, nil
-	}
-	if err := os.WriteFile(fileName, []byte(hexutil.Encode(jwtSecret)), 0600); err != nil {
-		return nil, err
-	}
-	log.Info("Generated JWT secret", "path", fileName)
-	return jwtSecret, nil
-}
-
-// startRPC is a helper method to configure all the various RPC endpoints during node
+// configureRPC is a helper method to configure all the various RPC endpoints during node
 // startup. It's not meant to be called at any time afterwards as it makes certain
 // assumptions about the state of the node.
 func (n *Node) startRPC() error {
@@ -390,125 +349,55 @@ func (n *Node) startRPC() error {
 			return err
 		}
 	}
-	var (
-		servers   []*httpServer
-		open, all = n.GetAPIs()
-	)
 
-	initHttp := func(server *httpServer, apis []rpc.API, port int) error {
-		if err := server.setListenAddr(n.config.HTTPHost, port); err != nil {
-			return err
-		}
-		if err := server.enableRPC(apis, httpConfig{
+	// Configure HTTP.
+	if n.config.HTTPHost != "" {
+		config := httpConfig{
 			CorsAllowedOrigins: n.config.HTTPCors,
 			Vhosts:             n.config.HTTPVirtualHosts,
 			Modules:            n.config.HTTPModules,
 			prefix:             n.config.HTTPPathPrefix,
-		}); err != nil {
+		}
+		if err := n.http.setListenAddr(n.config.HTTPHost, n.config.HTTPPort); err != nil {
 			return err
 		}
-		servers = append(servers, server)
-		return nil
+		if err := n.http.enableRPC(n.rpcAPIs, config); err != nil {
+			return err
+		}
 	}
 
-	initWS := func(apis []rpc.API, port int) error {
-		server := n.wsServerForPort(port, false)
-		if err := server.setListenAddr(n.config.WSHost, port); err != nil {
-			return err
-		}
-		if err := server.enableWS(n.rpcAPIs, wsConfig{
+	// Configure WebSocket.
+	if n.config.WSHost != "" {
+		server := n.wsServerForPort(n.config.WSPort)
+		config := wsConfig{
 			Modules: n.config.WSModules,
 			Origins: n.config.WSOrigins,
 			prefix:  n.config.WSPathPrefix,
-		}); err != nil {
+		}
+		if err := server.setListenAddr(n.config.WSHost, n.config.WSPort); err != nil {
 			return err
 		}
-		servers = append(servers, server)
-		return nil
+		if err := server.enableWS(n.rpcAPIs, config); err != nil {
+			return err
+		}
 	}
 
-	initAuth := func(apis []rpc.API, port int, secret []byte) error {
-		// Enable auth via HTTP
-		server := n.httpAuth
-		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
-			return err
-		}
-		if err := server.enableRPC(apis, httpConfig{
-			CorsAllowedOrigins: DefaultAuthCors,
-			Vhosts:             n.config.AuthVirtualHosts,
-			Modules:            DefaultAuthModules,
-			prefix:             DefaultAuthPrefix,
-			jwtSecret:          secret,
-		}); err != nil {
-			return err
-		}
-		servers = append(servers, server)
-		// Enable auth via WS
-		server = n.wsServerForPort(port, true)
-		if err := server.setListenAddr(n.config.AuthAddr, port); err != nil {
-			return err
-		}
-		if err := server.enableWS(apis, wsConfig{
-			Modules:   DefaultAuthModules,
-			Origins:   DefaultAuthOrigins,
-			prefix:    DefaultAuthPrefix,
-			jwtSecret: secret,
-		}); err != nil {
-			return err
-		}
-		servers = append(servers, server)
-		return nil
+	if err := n.http.start(); err != nil {
+		return err
 	}
-
-	// Set up HTTP.
-	if n.config.HTTPHost != "" {
-		// Configure legacy unauthenticated HTTP.
-		if err := initHttp(n.http, open, n.config.HTTPPort); err != nil {
-			return err
-		}
-	}
-	// Configure WebSocket.
-	if n.config.WSHost != "" {
-		// legacy unauthenticated
-		if err := initWS(open, n.config.WSPort); err != nil {
-			return err
-		}
-	}
-	// Configure authenticated API
-	if len(open) != len(all) {
-		jwtSecret, err := n.obtainJWTSecret(n.config.JWTSecret)
-		if err != nil {
-			return err
-		}
-		if err := initAuth(all, n.config.AuthPort, jwtSecret); err != nil {
-			return err
-		}
-	}
-	// Start the servers
-	for _, server := range servers {
-		if err := server.start(); err != nil {
-			return err
-		}
-	}
-	return nil
+	return n.ws.start()
 }
 
-func (n *Node) wsServerForPort(port int, authenticated bool) *httpServer {
-	httpServer, wsServer := n.http, n.ws
-	if authenticated {
-		httpServer, wsServer = n.httpAuth, n.wsAuth
+func (n *Node) wsServerForPort(port int) *httpServer {
+	if n.config.HTTPHost == "" || n.http.port == port {
+		return n.http
 	}
-	if n.config.HTTPHost == "" || httpServer.port == port {
-		return httpServer
-	}
-	return wsServer
+	return n.ws
 }
 
 func (n *Node) stopRPC() {
 	n.http.stop()
 	n.ws.stop()
-	n.httpAuth.stop()
-	n.wsAuth.stop()
 	n.ipc.stop()
 	n.stopInProc()
 }
@@ -567,17 +456,6 @@ func (n *Node) RegisterAPIs(apis []rpc.API) {
 		panic("can't register APIs on running/stopped node")
 	}
 	n.rpcAPIs = append(n.rpcAPIs, apis...)
-}
-
-// GetAPIs return two sets of APIs, both the ones that do not require
-// authentication, and the complete set
-func (n *Node) GetAPIs() (unauthenticated, all []rpc.API) {
-	for _, api := range n.rpcAPIs {
-		if !api.Authenticated {
-			unauthenticated = append(unauthenticated, api)
-		}
-	}
-	return unauthenticated, n.rpcAPIs
 }
 
 // RegisterHandler mounts a handler on the given path on the canonical HTTP server.
@@ -676,14 +554,14 @@ func (n *Node) EventMux() *event.TypeMux {
 // OpenDatabase opens an existing database with the given name (or creates one if no
 // previous can be found) from within the node's instance directory. If the node is
 // ephemeral, a memory database is returned.
-func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, readonly bool) (xpsdb.Database, error) {
+func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
-	var db xpsdb.Database
+	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
@@ -702,14 +580,14 @@ func (n *Node) OpenDatabase(name string, cache, handles int, namespace string, r
 // also attaching a chain freezer to it that moves ancient chain data from the
 // database to immutable append-only files. If the node is an ephemeral one, a
 // memory database is returned.
-func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string, readonly bool) (xpsdb.Database, error) {
+func (n *Node) OpenDatabaseWithFreezer(name string, cache, handles int, freezer, namespace string, readonly bool) (ethdb.Database, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if n.state == closedState {
 		return nil, ErrNodeStopped
 	}
 
-	var db xpsdb.Database
+	var db ethdb.Database
 	var err error
 	if n.config.DataDir == "" {
 		db = rawdb.NewMemoryDatabase()
@@ -739,7 +617,7 @@ func (n *Node) ResolvePath(x string) string {
 // service, the wrapper removes it from the node's database map. This ensures that Node
 // won't auto-close the database if it is closed by the service that opened it.
 type closeTrackingDB struct {
-	xpsdb.Database
+	ethdb.Database
 	n *Node
 }
 
@@ -751,7 +629,7 @@ func (db *closeTrackingDB) Close() error {
 }
 
 // wrapDatabase ensures the database will be auto-closed when Node is closed.
-func (n *Node) wrapDatabase(db xpsdb.Database) xpsdb.Database {
+func (n *Node) wrapDatabase(db ethdb.Database) ethdb.Database {
 	wrapper := &closeTrackingDB{db, n}
 	n.databases[wrapper] = struct{}{}
 	return wrapper

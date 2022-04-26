@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package enode
 
@@ -26,9 +26,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enr"
-	"github.com/xpaymentsorg/go-xpayments/p2p/netutil"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 const (
@@ -63,7 +63,7 @@ type LocalNode struct {
 type lnEndpoint struct {
 	track                *netutil.IPTracker
 	staticIP, fallbackIP net.IP
-	fallbackUDP          uint16 // port
+	fallbackUDP          int
 }
 
 // NewLocalNode creates a local node.
@@ -208,8 +208,8 @@ func (ln *LocalNode) SetFallbackUDP(port int) {
 	ln.mu.Lock()
 	defer ln.mu.Unlock()
 
-	ln.endpoint4.fallbackUDP = uint16(port)
-	ln.endpoint6.fallbackUDP = uint16(port)
+	ln.endpoint4.fallbackUDP = port
+	ln.endpoint6.fallbackUDP = port
 	ln.updateEndpoints()
 }
 
@@ -261,7 +261,7 @@ func (ln *LocalNode) updateEndpoints() {
 }
 
 // get returns the endpoint with highest precedence.
-func (e *lnEndpoint) get() (newIP net.IP, newPort uint16) {
+func (e *lnEndpoint) get() (newIP net.IP, newPort int) {
 	newPort = e.fallbackUDP
 	if e.fallbackIP != nil {
 		newIP = e.fallbackIP
@@ -277,18 +277,15 @@ func (e *lnEndpoint) get() (newIP net.IP, newPort uint16) {
 
 // predictAddr wraps IPTracker.PredictEndpoint, converting from its string-based
 // endpoint representation to IP and port types.
-func predictAddr(t *netutil.IPTracker) (net.IP, uint16) {
+func predictAddr(t *netutil.IPTracker) (net.IP, int) {
 	ep := t.PredictEndpoint()
 	if ep == "" {
 		return nil, 0
 	}
 	ipString, portString, _ := net.SplitHostPort(ep)
 	ip := net.ParseIP(ipString)
-	port, err := strconv.ParseUint(portString, 10, 16)
-	if err != nil {
-		return nil, 0
-	}
-	return ip, uint16(port)
+	port, _ := strconv.Atoi(portString)
+	return ip, port
 }
 
 func (ln *LocalNode) invalidate() {

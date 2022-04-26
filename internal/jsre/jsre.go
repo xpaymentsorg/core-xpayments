@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package jsre provides execution environment for JavaScript.
 package jsre
@@ -20,7 +20,6 @@ package jsre
 import (
 	crand "crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,7 +27,7 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
-	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // JSRE is a JS runtime environment embedding the goja interpreter.
@@ -221,33 +220,19 @@ loop:
 }
 
 // Do executes the given function on the JS event loop.
-// When the runtime is stopped, fn will not execute.
 func (re *JSRE) Do(fn func(*goja.Runtime)) {
 	done := make(chan bool)
 	req := &evalReq{fn, done}
-	select {
-	case re.evalQueue <- req:
-		<-done
-	case <-re.closed:
-	}
+	re.evalQueue <- req
+	<-done
 }
 
-// Stop terminates the event loop, optionally waiting for all timers to expire.
+// stops the event loop before exit, optionally waits for all timers to expire
 func (re *JSRE) Stop(waitForCallbacks bool) {
-	timeout := time.NewTimer(10 * time.Millisecond)
-	defer timeout.Stop()
-
-	for {
-		select {
-		case <-re.closed:
-			return
-		case re.stopEventLoop <- waitForCallbacks:
-			<-re.closed
-			return
-		case <-timeout.C:
-			// JS is blocked, interrupt and try again.
-			re.vm.Interrupt(errors.New("JS runtime stopped"))
-		}
+	select {
+	case <-re.closed:
+	case re.stopEventLoop <- waitForCallbacks:
+		<-re.closed
 	}
 }
 
@@ -295,19 +280,6 @@ func (re *JSRE) Evaluate(code string, w io.Writer) {
 		}
 		fmt.Fprintln(w)
 	})
-}
-
-// Interrupt stops the current JS evaluation.
-func (re *JSRE) Interrupt(v interface{}) {
-	done := make(chan bool)
-	noop := func(*goja.Runtime) {}
-
-	select {
-	case re.evalQueue <- &evalReq{noop, done}:
-		// event loop is not blocked.
-	default:
-		re.vm.Interrupt(v)
-	}
 }
 
 // Compile compiles and then runs a piece of JS code.

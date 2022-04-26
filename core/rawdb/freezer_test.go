@@ -1,18 +1,18 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2021 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package rawdb
 
@@ -24,13 +24,12 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
-	"path"
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/stretchr/testify/require"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var freezerTestTableDef = map[string]bool{"test": true}
@@ -55,7 +54,7 @@ func TestFreezerModify(t *testing.T) {
 	defer f.Close()
 
 	// Commit test data.
-	_, err := f.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i := range valuesRaw {
 			if err := op.AppendRaw("raw", uint64(i), valuesRaw[i]); err != nil {
 				return err
@@ -100,7 +99,7 @@ func TestFreezerModifyRollback(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	theError := errors.New("oops")
-	_, err := f.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+	_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		// Append three items. This creates two files immediately,
 		// because the table size limit of the test freezer is 2048.
 		require.NoError(t, op.AppendRaw("test", 0, make([]byte, 2048)))
@@ -145,7 +144,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 		defer wg.Done()
 		defer close(written)
 		for item := uint64(0); item < 10000; item += writeBatchSize {
-			_, err := f.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+			_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 				for i := uint64(0); i < writeBatchSize; i++ {
 					item := item + i
 					value := getChunk(32, int(item))
@@ -187,7 +186,7 @@ func TestFreezerConcurrentModifyRetrieve(t *testing.T) {
 	wg.Wait()
 }
 
-// This test runs ModifyAncients and TruncateHead concurrently with each other.
+// This test runs ModifyAncients and TruncateAncients concurrently with each other.
 func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 	f, dir := newFreezerForTesting(t, freezerTestTableDef)
 	defer os.RemoveAll(dir)
@@ -197,10 +196,10 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		// First reset and write 100 items.
-		if err := f.TruncateHead(0); err != nil {
+		if err := f.TruncateAncients(0); err != nil {
 			t.Fatal("truncate failed:", err)
 		}
-		_, err := f.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+		_, err := f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 			for i := uint64(0); i < 100; i++ {
 				if err := op.AppendRaw("test", i, item); err != nil {
 					return err
@@ -221,7 +220,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		)
 		wg.Add(3)
 		go func() {
-			_, modifyErr = f.ModifyAncients(func(op xpsdb.AncientWriteOp) error {
+			_, modifyErr = f.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 				for i := uint64(100); i < 200; i++ {
 					if err := op.AppendRaw("test", i, item); err != nil {
 						return err
@@ -232,7 +231,7 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			truncateErr = f.TruncateHead(10)
+			truncateErr = f.TruncateAncients(10)
 			wg.Done()
 		}()
 		go func() {
@@ -247,48 +246,10 @@ func TestFreezerConcurrentModifyTruncate(t *testing.T) {
 		if truncateErr != nil {
 			t.Fatal("concurrent truncate failed:", err)
 		}
-		if !(errors.Is(modifyErr, nil) || errors.Is(modifyErr, errOutOrderInsertion)) {
+		if !(modifyErr == nil || modifyErr == errOutOrderInsertion) {
 			t.Fatal("wrong error from concurrent modify:", modifyErr)
 		}
 		checkAncientCount(t, f, "test", 10)
-	}
-}
-
-func TestFreezerReadonlyValidate(t *testing.T) {
-	tables := map[string]bool{"a": true, "b": true}
-	dir, err := ioutil.TempDir("", "freezer")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-	// Open non-readonly freezer and fill individual tables
-	// with different amount of data.
-	f, err := newFreezer(dir, "", false, 2049, tables)
-	if err != nil {
-		t.Fatal("can't open freezer", err)
-	}
-	var item = make([]byte, 1024)
-	aBatch := f.tables["a"].newBatch()
-	require.NoError(t, aBatch.AppendRaw(0, item))
-	require.NoError(t, aBatch.AppendRaw(1, item))
-	require.NoError(t, aBatch.AppendRaw(2, item))
-	require.NoError(t, aBatch.commit())
-	bBatch := f.tables["b"].newBatch()
-	require.NoError(t, bBatch.AppendRaw(0, item))
-	require.NoError(t, bBatch.commit())
-	if f.tables["a"].items != 3 {
-		t.Fatalf("unexpected number of items in table")
-	}
-	if f.tables["b"].items != 1 {
-		t.Fatalf("unexpected number of items in table")
-	}
-	require.NoError(t, f.Close())
-
-	// Re-openening as readonly should fail when validating
-	// table lengths.
-	f, err = newFreezer(dir, "", true, 2049, tables)
-	if err == nil {
-		t.Fatal("readonly freezer should fail with differing table lengths")
 	}
 }
 
@@ -336,94 +297,5 @@ func checkAncientCount(t *testing.T, f *freezer, kind string, n uint64) {
 		t.Errorf("Ancient(%q, %d) didn't return expected error", kind, index)
 	} else if err != errOutOfBounds {
 		t.Errorf("Ancient(%q, %d) returned unexpected error %q", kind, index, err)
-	}
-}
-
-func TestRenameWindows(t *testing.T) {
-	var (
-		fname   = "file.bin"
-		fname2  = "file2.bin"
-		data    = []byte{1, 2, 3, 4}
-		data2   = []byte{2, 3, 4, 5}
-		data3   = []byte{3, 5, 6, 7}
-		dataLen = 4
-	)
-
-	// Create 2 temp dirs
-	dir1, err := os.MkdirTemp("", "rename-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dir1)
-	dir2, err := os.MkdirTemp("", "rename-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dir2)
-
-	// Create file in dir1 and fill with data
-	f, err := os.Create(path.Join(dir1, fname))
-	if err != nil {
-		t.Fatal(err)
-	}
-	f2, err := os.Create(path.Join(dir1, fname2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	f3, err := os.Create(path.Join(dir2, fname2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.Write(data); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f2.Write(data2); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f3.Write(data3); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := f2.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := f3.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(f.Name(), path.Join(dir2, fname)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(f2.Name(), path.Join(dir2, fname2)); err != nil {
-		t.Fatal(err)
-	}
-
-	// Check file contents
-	f, err = os.Open(path.Join(dir2, fname))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-	buf := make([]byte, dataLen)
-	if _, err := f.Read(buf); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(buf, data) {
-		t.Errorf("unexpected file contents. Got %v\n", buf)
-	}
-
-	f, err = os.Open(path.Join(dir2, fname2))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	defer os.Remove(f.Name())
-	if _, err := f.Read(buf); err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(buf, data2) {
-		t.Errorf("unexpected file contents. Got %v\n", buf)
 	}
 }

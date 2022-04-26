@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file.
 
-//go:build gofuzz
 // +build gofuzz
 
 package bn256
@@ -14,8 +13,8 @@ import (
 	"math/big"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254"
-	cloudflare "github.com/xpaymentsorg/go-xpayments/crypto/bn256/cloudflare"
-	google "github.com/xpaymentsorg/go-xpayments/crypto/bn256/google"
+	cloudflare "github.com/ethereum/go-ethereum/crypto/bn256/cloudflare"
+	google "github.com/ethereum/go-ethereum/crypto/bn256/google"
 )
 
 func getG1Points(input io.Reader) (*cloudflare.G1, *google.G1, *bn254.G1Affine) {
@@ -99,7 +98,7 @@ func FuzzMul(data []byte) int {
 		return 0
 	}
 	if remaining > 128 {
-		// The xvm only ever uses 32 byte integers, we need to cap this otherwise
+		// The evm only ever uses 32 byte integers, we need to cap this otherwise
 		// we run into slow exec. A 236Kb byte integer cause oss-fuzz to report it as slow.
 		// 128 bytes should be fine though
 		return 0

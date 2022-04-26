@@ -101,27 +101,8 @@ type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at
 	HighestBlock  uint64 // Highest alleged block number in the chain
-
-	// "fast sync" fields. These used to be sent by gpay, but are no longer used
-	// since version v1.10.
-	PulledStates uint64 // Number of state trie entries already downloaded
-	KnownStates  uint64 // Total number of state trie entries known about
-
-	// "snap sync" fields.
-	SyncedAccounts      uint64 // Number of accounts downloaded
-	SyncedAccountBytes  uint64 // Number of account trie bytes persisted to disk
-	SyncedBytecodes     uint64 // Number of bytecodes downloaded
-	SyncedBytecodeBytes uint64 // Number of bytecode bytes downloaded
-	SyncedStorage       uint64 // Number of storage slots downloaded
-	SyncedStorageBytes  uint64 // Number of storage trie bytes persisted to disk
-
-	HealedTrienodes     uint64 // Number of state trie nodes downloaded
-	HealedTrienodeBytes uint64 // Number of state trie bytes persisted to disk
-	HealedBytecodes     uint64 // Number of bytecodes downloaded
-	HealedBytecodeBytes uint64 // Number of bytecodes persisted to disk
-
-	HealingTrienodes uint64 // Number of state trie nodes pending
-	HealingBytecode  uint64 // Number of bytecodes pending
+	PulledStates  uint64 // Number of state trie entries already downloaded
+	KnownStates   uint64 // Total number of state trie entries known about
 }
 
 // ChainSyncReader wraps access to the node's current sync status. If there's no
@@ -145,7 +126,7 @@ type CallMsg struct {
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by
-// the XVM but not mined into the blockchain. ContractCall is a low-level method to
+// the EVM but not mined into the blockchain. ContractCall is a low-level method to
 // execute such calls. For applications which are structured around specific contracts,
 // the abigen tool provides a nicer, properly typed way to perform calls.
 type ContractCaller interface {
@@ -154,7 +135,7 @@ type ContractCaller interface {
 
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
-	BlockHash *common.Hash     // used by xps_getLogs, return logs only from block with this hash
+	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
 	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
 	ToBlock   *big.Int         // end of the range, nil means latest block
 	Addresses []common.Address // restricts matches to events created by specific contracts
@@ -231,4 +212,10 @@ type GasEstimator interface {
 // pending state.
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
+}
+
+// StateSyncFilter state sync filter
+type StateSyncFilter struct {
+	ID       uint64
+	Contract common.Address
 }

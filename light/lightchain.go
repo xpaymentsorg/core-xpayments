@@ -1,21 +1,21 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-xpayments library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-xpayments library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-xpayments library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package light implements on-demand retrieval capable state and chain objects
-// for the xPayments Light Client.
+// for the Ethereum Light Client.
 package light
 
 import (
@@ -26,18 +26,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/state"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/event"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
 )
 
 var (
@@ -51,7 +51,7 @@ var (
 type LightChain struct {
 	hc            *core.HeaderChain
 	indexerConfig *IndexerConfig
-	chainDb       xpsdb.Database
+	chainDb       ethdb.Database
 	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
@@ -59,7 +59,6 @@ type LightChain struct {
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
-	forker        *core.ForkChoice
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
@@ -73,10 +72,13 @@ type LightChain struct {
 	running          int32 // whether LightChain is running or stopped
 	procInterrupt    int32 // interrupts chain insert
 	disableCheckFreq int32 // disables header verification
+
+	// Bor
+	chain2HeadFeed event.Feed
 }
 
 // NewLightChain returns a fully initialised light chain using information
-// available in the database. It initialises the default xPayments header
+// available in the database. It initialises the default Ethereum header
 // validator.
 func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.Engine, checkpoint *params.TrustedCheckpoint) (*LightChain, error) {
 	bodyCache, _ := lru.New(bodyCacheLimit)
@@ -93,7 +95,6 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
-	bc.forker = core.NewForkChoice(bc, nil)
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
@@ -371,42 +372,6 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 	}
 }
 
-func (lc *LightChain) InsertHeader(header *types.Header) error {
-	// Verify the header first before obtaining the lock
-	headers := []*types.Header{header}
-	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
-		return err
-	}
-	// Make sure only one thread manipulates the chain at once
-	lc.chainmu.Lock()
-	defer lc.chainmu.Unlock()
-
-	lc.wg.Add(1)
-	defer lc.wg.Done()
-
-	_, err := lc.hc.WriteHeaders(headers)
-	log.Info("Inserted header", "number", header.Number, "hash", header.Hash())
-	return err
-}
-
-func (lc *LightChain) SetChainHead(header *types.Header) error {
-	lc.chainmu.Lock()
-	defer lc.chainmu.Unlock()
-
-	lc.wg.Add(1)
-	defer lc.wg.Done()
-
-	if err := lc.hc.Reorg([]*types.Header{header}); err != nil {
-		return err
-	}
-	// Emit events
-	block := types.NewBlockWithHeader(header)
-	lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
-	lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
-	log.Info("Set the chain head", "number", block.Number(), "hash", block.Hash())
-	return nil
-}
-
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
@@ -419,9 +384,6 @@ func (lc *LightChain) SetChainHead(header *types.Header) error {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
-	if len(chain) == 0 {
-		return 0, nil
-	}
 	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
 		checkFreq = 0
 	}
@@ -437,23 +399,25 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
-	status, err := lc.hc.InsertHeaderChain(chain, start, lc.forker)
+	status, err := lc.hc.InsertHeaderChain(chain, start)
 	if err != nil || len(chain) == 0 {
 		return 0, err
 	}
 
 	// Create chain event for the new head block of this insertion.
 	var (
+		events     = make([]interface{}, 0, 1)
 		lastHeader = chain[len(chain)-1]
 		block      = types.NewBlockWithHeader(lastHeader)
 	)
 	switch status {
 	case core.CanonStatTy:
-		lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
-		lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
+		events = append(events, core.ChainEvent{Block: block, Hash: block.Hash()})
 	case core.SideStatTy:
-		lc.chainSideFeed.Send(core.ChainSideEvent{Block: block})
+		events = append(events, core.ChainSideEvent{Block: block})
 	}
+	lc.postChainEvents(events)
+
 	return 0, err
 }
 
@@ -600,6 +564,11 @@ func (lc *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent)
 	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }
 
+// SubscribeChain2HeadEvent registers a subscription of Reorg/head/fork events.
+func (lc *LightChain) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	return lc.scope.Track(lc.chain2HeadFeed.Subscribe(ch))
+}
+
 // DisableCheckFreq disables header validation. This is used for ultralight mode.
 func (lc *LightChain) DisableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 1)
@@ -608,4 +577,10 @@ func (lc *LightChain) DisableCheckFreq() {
 // EnableCheckFreq enables header validation.
 func (lc *LightChain) EnableCheckFreq() {
 	atomic.StoreInt32(&lc.disableCheckFreq, 0)
+}
+
+// SubscribeStateSyncEvent implements the interface of filters.Backend
+// LightChain does not send core.NewStateChangeSyncEvent, so return an empty subscription.
+func (lc *LightChain) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return lc.scope.Track(new(event.Feed).Subscribe(ch))
 }

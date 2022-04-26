@@ -1,20 +1,20 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of go-xpayments.
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
 //
-// go-xpayments is free software: you can redistribute it and/or modify
+// go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-xpayments is distributed in the hope that it will be useful,
+// go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with go-xpayments. If not, see <http://www.gnu.org/licenses/>.
+// along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-xpayments commands.
+// Package utils contains internal helper functions for go-ethereum commands.
 package utils
 
 import (
@@ -33,43 +33,41 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/fdlimit"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/gasprice"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/graphql"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/flags"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/exp"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/miner"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/p2p/netutil"
+	"github.com/ethereum/go-ethereum/params"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
-	"github.com/xpaymentsorg/go-xpayments/accounts"
-	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/common/fdlimit"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
-	"github.com/xpaymentsorg/go-xpayments/consensus/xpsash"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/graphql"
-	"github.com/xpaymentsorg/go-xpayments/internal/flags"
-	"github.com/xpaymentsorg/go-xpayments/internal/xpsapi"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/lxs"
-	lxscatalyst "github.com/xpaymentsorg/go-xpayments/lxs/catalyst"
-	"github.com/xpaymentsorg/go-xpayments/metrics"
-	"github.com/xpaymentsorg/go-xpayments/metrics/exp"
-	"github.com/xpaymentsorg/go-xpayments/metrics/influxdb"
-	"github.com/xpaymentsorg/go-xpayments/miner"
-	"github.com/xpaymentsorg/go-xpayments/node"
-	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/p2p/nat"
-	"github.com/xpaymentsorg/go-xpayments/p2p/netutil"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/xps"
-	xpscatalyst "github.com/xpaymentsorg/go-xpayments/xps/catalyst"
-	"github.com/xpaymentsorg/go-xpayments/xps/downloader"
-	"github.com/xpaymentsorg/go-xpayments/xps/gasprice"
-	"github.com/xpaymentsorg/go-xpayments/xps/tracers"
-	"github.com/xpaymentsorg/go-xpayments/xps/xpsconfig"
-	"github.com/xpaymentsorg/go-xpayments/xpsdb"
-	"github.com/xpaymentsorg/go-xpayments/xpsstats"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -139,11 +137,11 @@ var (
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
 		Usage: "Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead)",
-		Value: xpsconfig.Defaults.NetworkId,
+		Value: ethconfig.Defaults.NetworkId,
 	}
 	MainnetFlag = cli.BoolFlag{
 		Name:  "mainnet",
-		Usage: "xPayments mainnet",
+		Usage: "Ethereum mainnet",
 	}
 	GoerliFlag = cli.BoolFlag{
 		Name:  "goerli",
@@ -157,13 +155,13 @@ var (
 		Name:  "ropsten",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
-	SepoliaFlag = cli.BoolFlag{
-		Name:  "sepolia",
-		Usage: "Sepolia network: pre-configured proof-of-work test network",
+	MumbaiFlag = cli.BoolFlag{
+		Name:  "bor-mumbai",
+		Usage: "Mumbai network: pre-configured proof-of-stake test network",
 	}
-	KilnFlag = cli.BoolFlag{
-		Name:  "kiln",
-		Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
+	BorMainnetFlag = cli.BoolFlag{
+		Name:  "bor-mainnet",
+		Usage: "Bor mainnet",
 	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
@@ -172,11 +170,6 @@ var (
 	DeveloperPeriodFlag = cli.IntFlag{
 		Name:  "dev.period",
 		Usage: "Block period to use in developer mode (0 = mine only if transaction pending)",
-	}
-	DeveloperGasLimitFlag = cli.Uint64Flag{
-		Name:  "dev.gaslimit",
-		Usage: "Initial block gas limit",
-		Value: 11500000,
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
@@ -217,10 +210,10 @@ var (
 		Usage: "Max number of elements (0 = no limit)",
 		Value: 0,
 	}
-	defaultSyncMode = xpsconfig.Defaults.SyncMode
+	defaultSyncMode = ethconfig.Defaults.SyncMode
 	SyncModeFlag    = TextMarshalerFlag{
 		Name:  "syncmode",
-		Usage: `Blockchain sync mode ("snap", "full" or "light")`,
+		Usage: `Blockchain sync mode ("fast", "full", "snap" or "light")`,
 		Value: &defaultSyncMode,
 	}
 	GCModeFlag = cli.StringFlag{
@@ -234,64 +227,56 @@ var (
 	}
 	TxLookupLimitFlag = cli.Uint64Flag{
 		Name:  "txlookuplimit",
-		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
-		Value: xpsconfig.Defaults.TxLookupLimit,
+		Usage: "Number of recent blocks to maintain transactions index for (default = about 56 days, 0 = entire chain)",
+		Value: ethconfig.Defaults.TxLookupLimit,
 	}
 	LightKDFFlag = cli.BoolFlag{
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	XpsPeerRequiredBlocksFlag = cli.StringFlag{
-		Name:  "xps.requiredblocks",
-		Usage: "Comma separated block number-to-hash mappings to require for peering (<number>=<hash>)",
-	}
-	LegacyWhitelistFlag = cli.StringFlag{
+	WhitelistFlag = cli.StringFlag{
 		Name:  "whitelist",
-		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>) (deprecated in favor of --peer.requiredblocks)",
+		Usage: "Comma separated block number-to-hash mappings to enforce (<number>=<hash>)",
 	}
 	BloomFilterSizeFlag = cli.Uint64Flag{
 		Name:  "bloomfilter.size",
 		Usage: "Megabytes of memory allocated to bloom-filter for pruning",
 		Value: 2048,
 	}
-	OverrideArrowGlacierFlag = cli.Uint64Flag{
-		Name:  "override.arrowglacier",
-		Usage: "Manually specify Arrow Glacier fork-block, overriding the bundled setting",
-	}
-	OverrideTerminalTotalDifficulty = cli.Uint64Flag{
-		Name:  "override.terminaltotaldifficulty",
-		Usage: "Manually specify TerminalTotalDifficulty, overriding the bundled setting",
+	OverrideLondonFlag = cli.Uint64Flag{
+		Name:  "override.london",
+		Usage: "Manually specify London fork-block, overriding the bundled setting",
 	}
 	// Light server and client settings
 	LightServeFlag = cli.IntFlag{
 		Name:  "light.serve",
-		Usage: "Maximum percentage of time allowed for serving LXS requests (multi-threaded processing allows values over 100)",
-		Value: xpsconfig.Defaults.LightServ,
+		Usage: "Maximum percentage of time allowed for serving LES requests (multi-threaded processing allows values over 100)",
+		Value: ethconfig.Defaults.LightServ,
 	}
 	LightIngressFlag = cli.IntFlag{
 		Name:  "light.ingress",
 		Usage: "Incoming bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
-		Value: xpsconfig.Defaults.LightIngress,
+		Value: ethconfig.Defaults.LightIngress,
 	}
 	LightEgressFlag = cli.IntFlag{
 		Name:  "light.egress",
 		Usage: "Outgoing bandwidth limit for serving light clients (kilobytes/sec, 0 = unlimited)",
-		Value: xpsconfig.Defaults.LightEgress,
+		Value: ethconfig.Defaults.LightEgress,
 	}
 	LightMaxPeersFlag = cli.IntFlag{
 		Name:  "light.maxpeers",
 		Usage: "Maximum number of light clients to serve, or light servers to attach to",
-		Value: xpsconfig.Defaults.LightPeers,
+		Value: ethconfig.Defaults.LightPeers,
 	}
 	UltraLightServersFlag = cli.StringFlag{
 		Name:  "ulc.servers",
 		Usage: "List of trusted ultra-light servers",
-		Value: strings.Join(xpsconfig.Defaults.UltraLightServers, ","),
+		Value: strings.Join(ethconfig.Defaults.UltraLightServers, ","),
 	}
 	UltraLightFractionFlag = cli.IntFlag{
 		Name:  "ulc.fraction",
 		Usage: "Minimum % of trusted ultra-light servers required to announce a new head",
-		Value: xpsconfig.Defaults.UltraLightFraction,
+		Value: ethconfig.Defaults.UltraLightFraction,
 	}
 	UltraLightOnlyAnnounceFlag = cli.BoolFlag{
 		Name:  "ulc.onlyannounce",
@@ -305,43 +290,43 @@ var (
 		Name:  "light.nosyncserve",
 		Usage: "Enables serving light clients before syncing",
 	}
-	// Xpsash settings
-	XpsashCacheDirFlag = DirectoryFlag{
-		Name:  "xpsash.cachedir",
-		Usage: "Directory to store the xpsash verification caches (default = inside the datadir)",
+	// Ethash settings
+	EthashCacheDirFlag = DirectoryFlag{
+		Name:  "ethash.cachedir",
+		Usage: "Directory to store the ethash verification caches (default = inside the datadir)",
 	}
-	XpsashCachesInMemoryFlag = cli.IntFlag{
-		Name:  "xpsash.cachesinmem",
-		Usage: "Number of recent xpsash caches to keep in memory (16MB each)",
-		Value: xpsconfig.Defaults.Xpsash.CachesInMem,
+	EthashCachesInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.cachesinmem",
+		Usage: "Number of recent ethash caches to keep in memory (16MB each)",
+		Value: ethconfig.Defaults.Ethash.CachesInMem,
 	}
-	XpsashCachesOnDiskFlag = cli.IntFlag{
-		Name:  "xpsash.cachesondisk",
-		Usage: "Number of recent xpsash caches to keep on disk (16MB each)",
-		Value: xpsconfig.Defaults.Xpsash.CachesOnDisk,
+	EthashCachesOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.cachesondisk",
+		Usage: "Number of recent ethash caches to keep on disk (16MB each)",
+		Value: ethconfig.Defaults.Ethash.CachesOnDisk,
 	}
-	XpsashCachesLockMmapFlag = cli.BoolFlag{
-		Name:  "xpsash.cacheslockmmap",
-		Usage: "Lock memory maps of recent xpsash caches",
+	EthashCachesLockMmapFlag = cli.BoolFlag{
+		Name:  "ethash.cacheslockmmap",
+		Usage: "Lock memory maps of recent ethash caches",
 	}
-	XpsashDatasetDirFlag = DirectoryFlag{
-		Name:  "xpsash.dagdir",
-		Usage: "Directory to store the xpsash mining DAGs",
-		Value: DirectoryString(xpsconfig.Defaults.Xpsash.DatasetDir),
+	EthashDatasetDirFlag = DirectoryFlag{
+		Name:  "ethash.dagdir",
+		Usage: "Directory to store the ethash mining DAGs",
+		Value: DirectoryString(ethconfig.Defaults.Ethash.DatasetDir),
 	}
-	XpsashDatasetsInMemoryFlag = cli.IntFlag{
-		Name:  "xpsash.dagsinmem",
-		Usage: "Number of recent xpsash mining DAGs to keep in memory (1+GB each)",
-		Value: xpsconfig.Defaults.Xpsash.DatasetsInMem,
+	EthashDatasetsInMemoryFlag = cli.IntFlag{
+		Name:  "ethash.dagsinmem",
+		Usage: "Number of recent ethash mining DAGs to keep in memory (1+GB each)",
+		Value: ethconfig.Defaults.Ethash.DatasetsInMem,
 	}
-	XpsashDatasetsOnDiskFlag = cli.IntFlag{
-		Name:  "xpsash.dagsondisk",
-		Usage: "Number of recent xpsash mining DAGs to keep on disk (1+GB each)",
-		Value: xpsconfig.Defaults.Xpsash.DatasetsOnDisk,
+	EthashDatasetsOnDiskFlag = cli.IntFlag{
+		Name:  "ethash.dagsondisk",
+		Usage: "Number of recent ethash mining DAGs to keep on disk (1+GB each)",
+		Value: ethconfig.Defaults.Ethash.DatasetsOnDisk,
 	}
-	XpsashDatasetsLockMmapFlag = cli.BoolFlag{
-		Name:  "xpsash.dagslockmmap",
-		Usage: "Lock memory maps for recent xpsash mining DAGs",
+	EthashDatasetsLockMmapFlag = cli.BoolFlag{
+		Name:  "ethash.dagslockmmap",
+		Usage: "Lock memory maps for recent ethash mining DAGs",
 	}
 	// Transaction pool settings
 	TxPoolLocalsFlag = cli.StringFlag{
@@ -365,39 +350,43 @@ var (
 	TxPoolPriceLimitFlag = cli.Uint64Flag{
 		Name:  "txpool.pricelimit",
 		Usage: "Minimum gas price limit to enforce for acceptance into the pool",
-		Value: xpsconfig.Defaults.TxPool.PriceLimit,
+		Value: ethconfig.Defaults.TxPool.PriceLimit,
 	}
 	TxPoolPriceBumpFlag = cli.Uint64Flag{
 		Name:  "txpool.pricebump",
 		Usage: "Price bump percentage to replace an already existing transaction",
-		Value: xpsconfig.Defaults.TxPool.PriceBump,
+		Value: ethconfig.Defaults.TxPool.PriceBump,
 	}
 	TxPoolAccountSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.accountslots",
 		Usage: "Minimum number of executable transaction slots guaranteed per account",
-		Value: xpsconfig.Defaults.TxPool.AccountSlots,
+		Value: ethconfig.Defaults.TxPool.AccountSlots,
 	}
 	TxPoolGlobalSlotsFlag = cli.Uint64Flag{
 		Name:  "txpool.globalslots",
 		Usage: "Maximum number of executable transaction slots for all accounts",
-		Value: xpsconfig.Defaults.TxPool.GlobalSlots,
+		Value: ethconfig.Defaults.TxPool.GlobalSlots,
 	}
 	TxPoolAccountQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.accountqueue",
 		Usage: "Maximum number of non-executable transaction slots permitted per account",
-		Value: xpsconfig.Defaults.TxPool.AccountQueue,
+		Value: ethconfig.Defaults.TxPool.AccountQueue,
 	}
 	TxPoolGlobalQueueFlag = cli.Uint64Flag{
 		Name:  "txpool.globalqueue",
 		Usage: "Maximum number of non-executable transaction slots for all accounts",
-		Value: xpsconfig.Defaults.TxPool.GlobalQueue,
+		Value: ethconfig.Defaults.TxPool.GlobalQueue,
 	}
 	TxPoolLifetimeFlag = cli.DurationFlag{
 		Name:  "txpool.lifetime",
 		Usage: "Maximum amount of time non-executable transaction are queued",
-		Value: xpsconfig.Defaults.TxPool.Lifetime,
+		Value: ethconfig.Defaults.TxPool.Lifetime,
 	}
 	// Performance tuning settings
+	BorLogsFlag = cli.BoolFlag{
+		Name:  "bor.logs",
+		Usage: "Enable bor logs retrieval",
+	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
 		Usage: "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
@@ -416,12 +405,12 @@ var (
 	CacheTrieJournalFlag = cli.StringFlag{
 		Name:  "cache.trie.journal",
 		Usage: "Disk journal directory for trie cache to survive node restarts",
-		Value: xpsconfig.Defaults.TrieCleanCacheJournal,
+		Value: ethconfig.Defaults.TrieCleanCacheJournal,
 	}
 	CacheTrieRejournalFlag = cli.DurationFlag{
 		Name:  "cache.trie.rejournal",
 		Usage: "Time interval to regenerate the trie cache journal",
-		Value: xpsconfig.Defaults.TrieCleanCacheRejournal,
+		Value: ethconfig.Defaults.TrieCleanCacheRejournal,
 	}
 	CacheGCFlag = cli.IntFlag{
 		Name:  "cache.gc",
@@ -440,10 +429,6 @@ var (
 	CachePreimagesFlag = cli.BoolFlag{
 		Name:  "cache.preimages",
 		Usage: "Enable recording the SHA3/keccak preimages of trie keys",
-	}
-	FDLimitFlag = cli.IntFlag{
-		Name:  "fdlimit",
-		Usage: "Raise the open file descriptor resource limit (default = system fd limit)",
 	}
 	// Miner settings
 	MiningEnabledFlag = cli.BoolFlag{
@@ -466,15 +451,15 @@ var (
 	MinerGasLimitFlag = cli.Uint64Flag{
 		Name:  "miner.gaslimit",
 		Usage: "Target gas ceiling for mined blocks",
-		Value: xpsconfig.Defaults.Miner.GasCeil,
+		Value: ethconfig.Defaults.Miner.GasCeil,
 	}
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
-		Value: xpsconfig.Defaults.Miner.GasPrice,
+		Value: ethconfig.Defaults.Miner.GasPrice,
 	}
-	MinerXpserbaseFlag = cli.StringFlag{
-		Name:  "miner.xpserbase",
+	MinerEtherbaseFlag = cli.StringFlag{
+		Name:  "miner.etherbase",
 		Usage: "Public address for block mining rewards (default = first account)",
 		Value: "0",
 	}
@@ -485,7 +470,7 @@ var (
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
 		Usage: "Time interval to recreate the block being mined",
-		Value: xpsconfig.Defaults.Miner.Recommit,
+		Value: ethconfig.Defaults.Miner.Recommit,
 	}
 	MinerNoVerifyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
@@ -517,43 +502,23 @@ var (
 	}
 	RPCGlobalGasCapFlag = cli.Uint64Flag{
 		Name:  "rpc.gascap",
-		Usage: "Sets a cap on gas that can be used in xps_call/estimateGas (0=infinite)",
-		Value: xpsconfig.Defaults.RPCGasCap,
+		Usage: "Sets a cap on gas that can be used in eth_call/estimateGas (0=infinite)",
+		Value: ethconfig.Defaults.RPCGasCap,
 	}
-	RPCGlobalXVMTimeoutFlag = cli.DurationFlag{
-		Name:  "rpc.xvmtimeout",
-		Usage: "Sets a timeout used for xps_call (0=infinite)",
-		Value: xpsconfig.Defaults.RPCXVMTimeout,
+	RPCGlobalEVMTimeoutFlag = cli.DurationFlag{
+		Name:  "rpc.evmtimeout",
+		Usage: "Sets a timeout used for eth_call (0=infinite)",
+		Value: ethconfig.Defaults.RPCEVMTimeout,
 	}
 	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
 		Name:  "rpc.txfeecap",
-		Usage: "Sets a cap on transaction fee (in xpser) that can be sent via the RPC APIs (0 = no cap)",
-		Value: xpsconfig.Defaults.RPCTxFeeCap,
-	}
-	// Authenticated RPC HTTP settings
-	AuthListenFlag = cli.StringFlag{
-		Name:  "authrpc.addr",
-		Usage: "Listening address for authenticated APIs",
-		Value: node.DefaultConfig.AuthAddr,
-	}
-	AuthPortFlag = cli.IntFlag{
-		Name:  "authrpc.port",
-		Usage: "Listening port for authenticated APIs",
-		Value: node.DefaultConfig.AuthPort,
-	}
-	AuthVirtualHostsFlag = cli.StringFlag{
-		Name:  "authrpc.vhosts",
-		Usage: "Comma separated list of virtual hostnames from which to accept requests (server enforced). Accepts '*' wildcard.",
-		Value: strings.Join(node.DefaultConfig.AuthVirtualHosts, ","),
-	}
-	JWTSecretFlag = cli.StringFlag{
-		Name:  "authrpc.jwtsecret",
-		Usage: "Path to a JWT secret to use for authenticated RPC endpoints",
+		Usage: "Sets a cap on transaction fee (in ether) that can be sent via the RPC APIs (0 = no cap)",
+		Value: ethconfig.Defaults.RPCTxFeeCap,
 	}
 	// Logging and debug settings
-	XpsStatsURLFlag = cli.StringFlag{
-		Name:  "xpsstats",
-		Usage: "Reporting URL of a xpsstats service (nodename:secret@host:port)",
+	EthStatsURLFlag = cli.StringFlag{
+		Name:  "ethstats",
+		Usage: "Reporting URL of a ethstats service (nodename:secret@host:port)",
 	}
 	FakePoWFlag = cli.BoolFlag{
 		Name:  "fakepow",
@@ -724,22 +689,22 @@ var (
 	GpoBlocksFlag = cli.IntFlag{
 		Name:  "gpo.blocks",
 		Usage: "Number of recent blocks to check for gas prices",
-		Value: xpsconfig.Defaults.GPO.Blocks,
+		Value: ethconfig.Defaults.GPO.Blocks,
 	}
 	GpoPercentileFlag = cli.IntFlag{
 		Name:  "gpo.percentile",
 		Usage: "Suggested gas price is the given percentile of a set of recent transaction gas prices",
-		Value: xpsconfig.Defaults.GPO.Percentile,
+		Value: ethconfig.Defaults.GPO.Percentile,
 	}
 	GpoMaxGasPriceFlag = cli.Int64Flag{
 		Name:  "gpo.maxprice",
-		Usage: "Maximum transaction priority fee (or gasprice before London fork) to be recommended by gpo",
-		Value: xpsconfig.Defaults.GPO.MaxPrice.Int64(),
+		Usage: "Maximum gas price will be recommended by gpo",
+		Value: ethconfig.Defaults.GPO.MaxPrice.Int64(),
 	}
 	GpoIgnoreGasPriceFlag = cli.Int64Flag{
 		Name:  "gpo.ignoreprice",
 		Usage: "Gas price below which gpo will ignore transactions",
-		Value: xpsconfig.Defaults.GPO.IgnorePrice.Int64(),
+		Value: ethconfig.Defaults.GPO.IgnorePrice.Int64(),
 	}
 
 	// Metrics flags
@@ -822,6 +787,11 @@ var (
 		Usage: "InfluxDB organization name (v2 only)",
 		Value: metrics.DefaultConfig.InfluxDBOrganization,
 	}
+
+	CatalystFlag = cli.BoolFlag{
+		Name:  "catalyst",
+		Usage: "Catalyst mode (eth2 integration testing)",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -830,7 +800,7 @@ var (
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
 		if ctx.GlobalBool(RopstenFlag.Name) {
-			// Maintain compatibility with older Gpay configurations storing the
+			// Maintain compatibility with older Geth configurations storing the
 			// Ropsten database in `testnet` instead of `ropsten`.
 			return filepath.Join(path, "ropsten")
 		}
@@ -840,11 +810,9 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
-		if ctx.GlobalBool(SepoliaFlag.Name) {
-			return filepath.Join(path, "sepolia")
-		}
-		if ctx.GlobalBool(KilnFlag.Name) {
-			return filepath.Join(path, "kiln")
+		if ctx.GlobalBool(MumbaiFlag.Name) || ctx.GlobalBool(BorMainnetFlag.Name) {
+			homeDir, _ := os.UserHomeDir()
+			return filepath.Join(homeDir, "/.bor/data")
 		}
 		return path
 	}
@@ -894,14 +862,14 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
 	case ctx.GlobalBool(RopstenFlag.Name):
 		urls = params.RopstenBootnodes
-	case ctx.GlobalBool(SepoliaFlag.Name):
-		urls = params.SepoliaBootnodes
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(KilnFlag.Name):
-		urls = params.KilnBootnodes
+	case ctx.GlobalBool(MumbaiFlag.Name):
+		urls = params.MumbaiBootnodes
+	case ctx.GlobalBool(BorMainnetFlag.Name):
+		urls = params.BorMainnetBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -988,18 +956,6 @@ func setHTTP(ctx *cli.Context, cfg *node.Config) {
 		cfg.HTTPPort = ctx.GlobalInt(HTTPPortFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(AuthListenFlag.Name) {
-		cfg.AuthAddr = ctx.GlobalString(AuthListenFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(AuthPortFlag.Name) {
-		cfg.AuthPort = ctx.GlobalInt(AuthPortFlag.Name)
-	}
-
-	if ctx.GlobalIsSet(AuthVirtualHostsFlag.Name) {
-		cfg.AuthVirtualHosts = SplitAndTrim(ctx.GlobalString(AuthVirtualHostsFlag.Name))
-	}
-
 	if ctx.GlobalIsSet(HTTPCORSDomainFlag.Name) {
 		cfg.HTTPCors = SplitAndTrim(ctx.GlobalString(HTTPCORSDomainFlag.Name))
 	}
@@ -1069,8 +1025,8 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 	}
 }
 
-// setLxs configures the lxs server and ultra light client settings from the command line flags.
-func setLxs(ctx *cli.Context, cfg *xpsconfig.Config) {
+// setLes configures the les server and ultra light client settings from the command line flags.
+func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 	if ctx.GlobalIsSet(LightServeFlag.Name) {
 		cfg.LightServ = ctx.GlobalInt(LightServeFlag.Name)
 	}
@@ -1090,8 +1046,8 @@ func setLxs(ctx *cli.Context, cfg *xpsconfig.Config) {
 		cfg.UltraLightFraction = ctx.GlobalInt(UltraLightFractionFlag.Name)
 	}
 	if cfg.UltraLightFraction <= 0 && cfg.UltraLightFraction > 100 {
-		log.Error("Ultra light fraction is invalid", "had", cfg.UltraLightFraction, "updated", xpsconfig.Defaults.UltraLightFraction)
-		cfg.UltraLightFraction = xpsconfig.Defaults.UltraLightFraction
+		log.Error("Ultra light fraction is invalid", "had", cfg.UltraLightFraction, "updated", ethconfig.Defaults.UltraLightFraction)
+		cfg.UltraLightFraction = ethconfig.Defaults.UltraLightFraction
 	}
 	if ctx.GlobalIsSet(UltraLightOnlyAnnounceFlag.Name) {
 		cfg.UltraLightOnlyAnnounce = ctx.GlobalBool(UltraLightOnlyAnnounceFlag.Name)
@@ -1105,24 +1061,11 @@ func setLxs(ctx *cli.Context, cfg *xpsconfig.Config) {
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
-// for Gpay and returns half of the allowance to assign to the database.
-func MakeDatabaseHandles(max int) int {
+// for Geth and returns half of the allowance to assign to the database.
+func MakeDatabaseHandles() int {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
-	}
-	switch {
-	case max == 0:
-		// User didn't specify a meaningful value, use system limits
-	case max < 128:
-		// User specified something unhealthy, just use system defaults
-		log.Error("File descriptor limit invalid (<128)", "had", max, "updated", limit)
-	case max > limit:
-		// User requested more than the OS allows, notify that we can't allocate it
-		log.Warn("Requested file descriptors denied by OS", "req", max, "limit", limit)
-	default:
-		// User limit is meaningful and within allowed range, use that
-		limit = max
 	}
 	raised, err := fdlimit.Raise(uint64(limit))
 	if err != nil {
@@ -1146,7 +1089,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `gpay account list`)")
+	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
 	log.Warn("-------------------------------------------------------------------")
 
 	accs := ks.Accounts()
@@ -1156,24 +1099,24 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	return accs[index], nil
 }
 
-// setXpserbase retrieves the xpserbase either from the directly specified
+// setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
-func setXpserbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *xpsconfig.Config) {
-	// Extract the current xpserbase
-	var xpserbase string
-	if ctx.GlobalIsSet(MinerXpserbaseFlag.Name) {
-		xpserbase = ctx.GlobalString(MinerXpserbaseFlag.Name)
+func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
+	// Extract the current etherbase
+	var etherbase string
+	if ctx.GlobalIsSet(MinerEtherbaseFlag.Name) {
+		etherbase = ctx.GlobalString(MinerEtherbaseFlag.Name)
 	}
-	// Convert the xpserbase into an address and configure it
-	if xpserbase != "" {
+	// Convert the etherbase into an address and configure it
+	if etherbase != "" {
 		if ks != nil {
-			account, err := MakeAddress(ks, xpserbase)
+			account, err := MakeAddress(ks, etherbase)
 			if err != nil {
-				Fatalf("Invalid miner xpserbase: %v", err)
+				Fatalf("Invalid miner etherbase: %v", err)
 			}
-			cfg.Miner.Xpsbase = account.Address
+			cfg.Miner.Etherbase = account.Address
 		} else {
-			Fatalf("No xpsbase configured")
+			Fatalf("No etherbase configured")
 		}
 	}
 }
@@ -1228,11 +1171,11 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	if !(lightClient || lightServer) {
 		lightPeers = 0
 	}
-	xpsPeers := cfg.MaxPeers - lightPeers
+	ethPeers := cfg.MaxPeers - lightPeers
 	if lightClient {
-		xpsPeers = 0
+		ethPeers = 0
 	}
-	log.Info("Maximum peer count", "XPS", xpsPeers, "LXS", lightPeers, "total", cfg.MaxPeers)
+	log.Info("Maximum peer count", "ETH", ethPeers, "LES", lightPeers, "total", cfg.MaxPeers)
 
 	if ctx.GlobalIsSet(MaxPendingPeersFlag.Name) {
 		cfg.MaxPendingPeers = ctx.GlobalInt(MaxPendingPeersFlag.Name)
@@ -1259,7 +1202,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 		cfg.NetRestrict = list
 	}
 
-	if ctx.GlobalBool(DeveloperFlag.Name) {
+	if ctx.GlobalBool(DeveloperFlag.Name) || ctx.GlobalBool(CatalystFlag.Name) {
 		// --dev mode can't use p2p networking.
 		cfg.MaxPeers = 0
 		cfg.ListenAddr = ""
@@ -1279,10 +1222,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 	setNodeUserIdent(ctx, cfg)
 	setDataDir(ctx, cfg)
 	setSmartCard(ctx, cfg)
-
-	if ctx.GlobalIsSet(JWTSecretFlag.Name) {
-		cfg.JWTSecret = ctx.GlobalString(JWTSecretFlag.Name)
-	}
 
 	if ctx.GlobalIsSet(ExternalSignerFlag.Name) {
 		cfg.ExternalSigner = ctx.GlobalString(ExternalSignerFlag.Name)
@@ -1335,7 +1274,7 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
 	case ctx.GlobalBool(RopstenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		// Maintain compatibility with older Gpay configurations storing the
+		// Maintain compatibility with older Geth configurations storing the
 		// Ropsten database in `testnet` instead of `ropsten`.
 		legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
 		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
@@ -1350,10 +1289,12 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-	case ctx.GlobalBool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
-	case ctx.GlobalBool(KilnFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "kiln")
+	case ctx.GlobalBool(MumbaiFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		homeDir, _ := os.UserHomeDir()
+		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
+	case ctx.GlobalBool(BorMainnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		homeDir, _ := os.UserHomeDir()
+		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
 	}
 }
 
@@ -1361,7 +1302,7 @@ func setGPO(ctx *cli.Context, cfg *gasprice.Config, light bool) {
 	// If we are running the light client, apply another group
 	// settings for gas oracle.
 	if light {
-		*cfg = xpsconfig.LightClientGPO
+		*cfg = ethconfig.LightClientGPO
 	}
 	if ctx.GlobalIsSet(GpoBlocksFlag.Name) {
 		cfg.Blocks = ctx.GlobalInt(GpoBlocksFlag.Name)
@@ -1420,30 +1361,30 @@ func setTxPool(ctx *cli.Context, cfg *core.TxPoolConfig) {
 	}
 }
 
-func setXpsash(ctx *cli.Context, cfg *xpsconfig.Config) {
-	if ctx.GlobalIsSet(XpsashCacheDirFlag.Name) {
-		cfg.Xpsash.CacheDir = ctx.GlobalString(XpsashCacheDirFlag.Name)
+func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.GlobalIsSet(EthashCacheDirFlag.Name) {
+		cfg.Ethash.CacheDir = ctx.GlobalString(EthashCacheDirFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashDatasetDirFlag.Name) {
-		cfg.Xpsash.DatasetDir = ctx.GlobalString(XpsashDatasetDirFlag.Name)
+	if ctx.GlobalIsSet(EthashDatasetDirFlag.Name) {
+		cfg.Ethash.DatasetDir = ctx.GlobalString(EthashDatasetDirFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashCachesInMemoryFlag.Name) {
-		cfg.Xpsash.CachesInMem = ctx.GlobalInt(XpsashCachesInMemoryFlag.Name)
+	if ctx.GlobalIsSet(EthashCachesInMemoryFlag.Name) {
+		cfg.Ethash.CachesInMem = ctx.GlobalInt(EthashCachesInMemoryFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashCachesOnDiskFlag.Name) {
-		cfg.Xpsash.CachesOnDisk = ctx.GlobalInt(XpsashCachesOnDiskFlag.Name)
+	if ctx.GlobalIsSet(EthashCachesOnDiskFlag.Name) {
+		cfg.Ethash.CachesOnDisk = ctx.GlobalInt(EthashCachesOnDiskFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashCachesLockMmapFlag.Name) {
-		cfg.Xpsash.CachesLockMmap = ctx.GlobalBool(XpsashCachesLockMmapFlag.Name)
+	if ctx.GlobalIsSet(EthashCachesLockMmapFlag.Name) {
+		cfg.Ethash.CachesLockMmap = ctx.GlobalBool(EthashCachesLockMmapFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashDatasetsInMemoryFlag.Name) {
-		cfg.Xpsash.DatasetsInMem = ctx.GlobalInt(XpsashDatasetsInMemoryFlag.Name)
+	if ctx.GlobalIsSet(EthashDatasetsInMemoryFlag.Name) {
+		cfg.Ethash.DatasetsInMem = ctx.GlobalInt(EthashDatasetsInMemoryFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashDatasetsOnDiskFlag.Name) {
-		cfg.Xpsash.DatasetsOnDisk = ctx.GlobalInt(XpsashDatasetsOnDiskFlag.Name)
+	if ctx.GlobalIsSet(EthashDatasetsOnDiskFlag.Name) {
+		cfg.Ethash.DatasetsOnDisk = ctx.GlobalInt(EthashDatasetsOnDiskFlag.Name)
 	}
-	if ctx.GlobalIsSet(XpsashDatasetsLockMmapFlag.Name) {
-		cfg.Xpsash.DatasetsLockMmap = ctx.GlobalBool(XpsashDatasetsLockMmapFlag.Name)
+	if ctx.GlobalIsSet(EthashDatasetsLockMmapFlag.Name) {
+		cfg.Ethash.DatasetsLockMmap = ctx.GlobalBool(EthashDatasetsLockMmapFlag.Name)
 	}
 }
 
@@ -1472,33 +1413,26 @@ func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	}
 }
 
-func setPeerRequiredBlocks(ctx *cli.Context, cfg *xpsconfig.Config) {
-	peerRequiredBlocks := ctx.GlobalString(XpsPeerRequiredBlocksFlag.Name)
-
-	if peerRequiredBlocks == "" {
-		if ctx.GlobalIsSet(LegacyWhitelistFlag.Name) {
-			log.Warn("The flag --rpc is deprecated and will be removed, please use --peer.requiredblocks")
-			peerRequiredBlocks = ctx.GlobalString(LegacyWhitelistFlag.Name)
-		} else {
-			return
-		}
+func setWhitelist(ctx *cli.Context, cfg *ethconfig.Config) {
+	whitelist := ctx.GlobalString(WhitelistFlag.Name)
+	if whitelist == "" {
+		return
 	}
-
-	cfg.PeerRequiredBlocks = make(map[uint64]common.Hash)
-	for _, entry := range strings.Split(peerRequiredBlocks, ",") {
+	cfg.Whitelist = make(map[uint64]common.Hash)
+	for _, entry := range strings.Split(whitelist, ",") {
 		parts := strings.Split(entry, "=")
 		if len(parts) != 2 {
-			Fatalf("Invalid peer required block entry: %s", entry)
+			Fatalf("Invalid whitelist entry: %s", entry)
 		}
 		number, err := strconv.ParseUint(parts[0], 0, 64)
 		if err != nil {
-			Fatalf("Invalid peer required block number %s: %v", parts[0], err)
+			Fatalf("Invalid whitelist block number %s: %v", parts[0], err)
 		}
 		var hash common.Hash
 		if err = hash.UnmarshalText([]byte(parts[1])); err != nil {
-			Fatalf("Invalid peer required block hash %s: %v", parts[1], err)
+			Fatalf("Invalid whitelist hash %s: %v", parts[1], err)
 		}
-		cfg.PeerRequiredBlocks[number] = hash
+		cfg.Whitelist[number] = hash
 	}
 }
 
@@ -1543,10 +1477,10 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 	}
 }
 
-// SetXpsConfig applies xps-related command line flags to the config.
-func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
+// SetEthConfig applies eth-related command line flags to the config.
+func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, KilnFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, MumbaiFlag, BorMainnetFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1554,19 +1488,23 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 		log.Warn("Disable transaction unindexing for archive node")
 	}
 	if ctx.GlobalIsSet(LightServeFlag.Name) && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
-		log.Warn("LXS server cannot serve old transaction status and cannot connect below lxs/4 protocol version if transaction lookup index is limited")
+		log.Warn("LES server cannot serve old transaction status and cannot connect below les/4 protocol version if transaction lookup index is limited")
 	}
 	var ks *keystore.KeyStore
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)
 	}
-	setXpserbase(ctx, ks, cfg)
+	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
-	setXpsash(ctx, cfg)
+	setEthash(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
-	setPeerRequiredBlocks(ctx, cfg)
-	setLxs(ctx, cfg)
+	setWhitelist(ctx, cfg)
+	setLes(ctx, cfg)
+
+	if ctx.GlobalIsSet(BorLogsFlag.Name) {
+		cfg.BorLogs = ctx.GlobalBool(BorLogsFlag.Name)
+	}
 
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()
@@ -1597,7 +1535,7 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheDatabaseFlag.Name) {
 		cfg.DatabaseCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
 	}
-	cfg.DatabaseHandles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
+	cfg.DatabaseHandles = MakeDatabaseHandles()
 	if ctx.GlobalIsSet(AncientFlag.Name) {
 		cfg.DatabaseFreezer = ctx.GlobalString(AncientFlag.Name)
 	}
@@ -1660,20 +1598,20 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 	} else {
 		log.Info("Global gas cap disabled")
 	}
-	if ctx.GlobalIsSet(RPCGlobalXVMTimeoutFlag.Name) {
-		cfg.RPCXVMTimeout = ctx.GlobalDuration(RPCGlobalXVMTimeoutFlag.Name)
+	if ctx.GlobalIsSet(RPCGlobalEVMTimeoutFlag.Name) {
+		cfg.RPCEVMTimeout = ctx.GlobalDuration(RPCGlobalEVMTimeoutFlag.Name)
 	}
 	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
 		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
 	}
 	if ctx.GlobalIsSet(NoDiscoverFlag.Name) {
-		cfg.XpsDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
+		cfg.EthDiscoveryURLs, cfg.SnapDiscoveryURLs = []string{}, []string{}
 	} else if ctx.GlobalIsSet(DNSDiscoveryFlag.Name) {
 		urls := ctx.GlobalString(DNSDiscoveryFlag.Name)
 		if urls == "" {
-			cfg.XpsDiscoveryURLs = []string{}
+			cfg.EthDiscoveryURLs = []string{}
 		} else {
-			cfg.XpsDiscoveryURLs = SplitAndTrim(urls)
+			cfg.EthDiscoveryURLs = SplitAndTrim(urls)
 		}
 	}
 	// Override any default configs for hard coded networks.
@@ -1690,12 +1628,6 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultRopstenGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
-	case ctx.GlobalBool(SepoliaFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 11155111
-		}
-		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 4
@@ -1708,12 +1640,16 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(KilnFlag.Name):
+	case ctx.GlobalBool(MumbaiFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1337802
+			cfg.NetworkId = 80001
 		}
-		cfg.Genesis = core.DefaultKilnGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.KilnGenesisHash)
+		cfg.Genesis = core.DefaultMumbaiGenesisBlock()
+	case ctx.GlobalBool(BorMainnetFlag.Name):
+		if !ctx.GlobalIsSet(BorMainnetFlag.Name) {
+			cfg.NetworkId = 137
+		}
+		cfg.Genesis = core.DefaultBorMainnetGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1731,9 +1667,9 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 			// when we're definitely concerned with only one account.
 			passphrase = list[0]
 		}
-		// setXpsbase has been called above, configuring the miner address from command line flags.
-		if cfg.Miner.Xpsbase != (common.Address{}) {
-			developer = accounts.Account{Address: cfg.Miner.Xpsbase}
+		// setEtherbase has been called above, configuring the miner address from command line flags.
+		if cfg.Miner.Etherbase != (common.Address{}) {
+			developer = accounts.Account{Address: cfg.Miner.Etherbase}
 		} else if accs := ks.Accounts(); len(accs) > 0 {
 			developer = ks.Accounts()[0]
 		} else {
@@ -1748,17 +1684,11 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 		log.Info("Using developer account", "address", developer.Address)
 
 		// Create a new developer genesis block or reuse existing one
-		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), ctx.GlobalUint64(DeveloperGasLimitFlag.Name), developer.Address)
+		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
 		if ctx.GlobalIsSet(DataDirFlag.Name) {
-			// If datadir doesn't exist we need to open db in write-mode
-			// so leveldb can create files.
-			readonly := true
-			if !common.FileExist(stack.ResolvePath("chaindata")) {
-				readonly = false
-			}
 			// Check if we have an already initialized chain and fall back to
 			// that if so. Otherwise we need to generate a new genesis spec.
-			chaindb := MakeChainDatabase(ctx, stack, readonly)
+			chaindb := MakeChainDatabase(ctx, stack, false) // TODO (MariusVanDerWijden) make this read only
 			if rawdb.ReadCanonicalHash(chaindb, 0) != (common.Hash{}) {
 				cfg.Genesis = nil // fallback to db content
 			}
@@ -1776,66 +1706,56 @@ func SetXpsConfig(ctx *cli.Context, stack *node.Node, cfg *xpsconfig.Config) {
 
 // SetDNSDiscoveryDefaults configures DNS discovery with the given URL if
 // no URLs are set.
-func SetDNSDiscoveryDefaults(cfg *xpsconfig.Config, genesis common.Hash) {
-	if cfg.XpsDiscoveryURLs != nil {
+func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
+	if cfg.EthDiscoveryURLs != nil {
 		return // already set through flags/config
 	}
 	protocol := "all"
 	if cfg.SyncMode == downloader.LightSync {
-		protocol = "lxs"
+		protocol = "les"
 	}
 	if url := params.KnownDNSNetwork(genesis, protocol); url != "" {
-		cfg.XpsDiscoveryURLs = []string{url}
-		cfg.SnapDiscoveryURLs = cfg.XpsDiscoveryURLs
+		cfg.EthDiscoveryURLs = []string{url}
+		cfg.SnapDiscoveryURLs = cfg.EthDiscoveryURLs
 	}
 }
 
-// RegisterXpsService adds an xPayments client to the stack.
+// RegisterEthService adds an Ethereum client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
-func RegisterXpsService(stack *node.Node, cfg *xpsconfig.Config) (xpsapi.Backend, *xps.xPayments) {
+func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
-		backend, err := lxs.New(stack, cfg)
+		backend, err := les.New(stack, cfg)
 		if err != nil {
-			Fatalf("Failed to register the xPayments service: %v", err)
+			Fatalf("Failed to register the Ethereum service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
-		if backend.BlockChain().Config().TerminalTotalDifficulty != nil {
-			if err := lxscatalyst.Register(stack, backend); err != nil {
-				Fatalf("Failed to register the catalyst service: %v", err)
-			}
-		}
 		return backend.ApiBackend, nil
 	}
-	backend, err := xps.New(stack, cfg)
+	backend, err := eth.New(stack, cfg)
 	if err != nil {
-		Fatalf("Failed to register the xPayments service: %v", err)
+		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
 	if cfg.LightServ > 0 {
-		_, err := lxs.NewLxsServer(stack, backend, cfg)
+		_, err := les.NewLesServer(stack, backend, cfg)
 		if err != nil {
-			Fatalf("Failed to create the LXS server: %v", err)
-		}
-	}
-	if backend.BlockChain().Config().TerminalTotalDifficulty != nil {
-		if err := xpscatalyst.Register(stack, backend); err != nil {
-			Fatalf("Failed to register the catalyst service: %v", err)
+			Fatalf("Failed to create the LES server: %v", err)
 		}
 	}
 	stack.RegisterAPIs(tracers.APIs(backend.APIBackend))
 	return backend.APIBackend, backend
 }
 
-// RegisterXpsStatsService configures the xPayments Stats daemon and adds it to
+// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
 // the given node.
-func RegisterXpsStatsService(stack *node.Node, backend xpsapi.Backend, url string) {
-	if err := xpsstats.New(stack, backend, backend.Engine(), url); err != nil {
-		Fatalf("Failed to register the xPayments Stats service: %v", err)
+func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
+	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
+		Fatalf("Failed to register the Ethereum Stats service: %v", err)
 	}
 }
 
 // RegisterGraphQLService is a utility function to construct a new service and register it against a node.
-func RegisterGraphQLService(stack *node.Node, backend xpsapi.Backend, cfg node.Config) {
+func RegisterGraphQLService(stack *node.Node, backend ethapi.Backend, cfg node.Config) {
 	if err := graphql.New(stack, backend, cfg.GraphQLCors, cfg.GraphQLVirtualHosts); err != nil {
 		Fatalf("Failed to register the GraphQL service: %v", err)
 	}
@@ -1883,13 +1803,13 @@ func SetupMetrics(ctx *cli.Context) {
 
 			log.Info("Enabling metrics export to InfluxDB")
 
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "gpay.", tagsMap)
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
 		} else if enableExportV2 {
 			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
 
 			log.Info("Enabling metrics export to InfluxDB (v2)")
 
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "gpay.", tagsMap)
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
 		}
 
 		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
@@ -1918,13 +1838,13 @@ func SplitTagsFlag(tagsFlag string) map[string]string {
 }
 
 // MakeChainDatabase open an LevelDB using the flags passed to the client and will hard crash if it fails.
-func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) xpsdb.Database {
+func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.Database {
 	var (
 		cache   = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheDatabaseFlag.Name) / 100
-		handles = MakeDatabaseHandles(ctx.GlobalInt(FDLimitFlag.Name))
+		handles = MakeDatabaseHandles()
 
 		err     error
-		chainDb xpsdb.Database
+		chainDb ethdb.Database
 	)
 	if ctx.GlobalString(SyncModeFlag.Name) == "light" {
 		name := "lightchaindata"
@@ -1946,14 +1866,14 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultGenesisBlock()
 	case ctx.GlobalBool(RopstenFlag.Name):
 		genesis = core.DefaultRopstenGenesisBlock()
-	case ctx.GlobalBool(SepoliaFlag.Name):
-		genesis = core.DefaultSepoliaGenesisBlock()
 	case ctx.GlobalBool(RinkebyFlag.Name):
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(KilnFlag.Name):
-		genesis = core.DefaultKilnGenesisBlock()
+	case ctx.GlobalBool(MumbaiFlag.Name):
+		genesis = core.DefaultMumbaiGenesisBlock()
+	case ctx.GlobalBool(BorMainnetFlag.Name):
+		genesis = core.DefaultBorMainnetGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -1961,28 +1881,41 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb xpsdb.Database) {
-	var err error
+func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chainDb ethdb.Database) {
+	// expecting the last argument to be the genesis file
+	genesis, err := getGenesis(ctx.Args().Get(len(ctx.Args()) - 1))
+	if err != nil {
+		Fatalf("Valid genesis file is required as argument: {}", err)
+	}
+
 	chainDb = MakeChainDatabase(ctx, stack, false) // TODO(rjl493456442) support read-only database
-	config, _, err := core.SetupGenesisBlock(chainDb, MakeGenesis(ctx))
+	config, _, err := core.SetupGenesisBlock(chainDb, genesis)
 	if err != nil {
 		Fatalf("%v", err)
 	}
 	var engine consensus.Engine
+	var ethereum *eth.Ethereum
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
+	} else if config.Bor != nil {
+		ethereum = CreateBorEthereum(&eth.Config{
+			Genesis:         genesis,
+			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
+			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
+		})
+		engine = ethereum.Engine()
 	} else {
-		engine = xpsash.NewFaker()
+		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
-			engine = xpsash.New(xpsash.Config{
-				CacheDir:         stack.ResolvePath(xpsconfig.Defaults.Xpsash.CacheDir),
-				CachesInMem:      xpsconfig.Defaults.Xpsash.CachesInMem,
-				CachesOnDisk:     xpsconfig.Defaults.Xpsash.CachesOnDisk,
-				CachesLockMmap:   xpsconfig.Defaults.Xpsash.CachesLockMmap,
-				DatasetDir:       stack.ResolvePath(xpsconfig.Defaults.Xpsash.DatasetDir),
-				DatasetsInMem:    xpsconfig.Defaults.Xpsash.DatasetsInMem,
-				DatasetsOnDisk:   xpsconfig.Defaults.Xpsash.DatasetsOnDisk,
-				DatasetsLockMmap: xpsconfig.Defaults.Xpsash.DatasetsLockMmap,
+			engine = ethash.New(ethash.Config{
+				CacheDir:         stack.ResolvePath(ethconfig.Defaults.Ethash.CacheDir),
+				CachesInMem:      ethconfig.Defaults.Ethash.CachesInMem,
+				CachesOnDisk:     ethconfig.Defaults.Ethash.CachesOnDisk,
+				CachesLockMmap:   ethconfig.Defaults.Ethash.CachesLockMmap,
+				DatasetDir:       stack.ResolvePath(ethconfig.Defaults.Ethash.DatasetDir),
+				DatasetsInMem:    ethconfig.Defaults.Ethash.DatasetsInMem,
+				DatasetsOnDisk:   ethconfig.Defaults.Ethash.DatasetsOnDisk,
+				DatasetsLockMmap: ethconfig.Defaults.Ethash.DatasetsLockMmap,
 			}, nil, false)
 		}
 	}
@@ -1990,12 +1923,12 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
 	cache := &core.CacheConfig{
-		TrieCleanLimit:      xpsconfig.Defaults.TrieCleanCache,
+		TrieCleanLimit:      ethconfig.Defaults.TrieCleanCache,
 		TrieCleanNoPrefetch: ctx.GlobalBool(CacheNoPrefetchFlag.Name),
-		TrieDirtyLimit:      xpsconfig.Defaults.TrieDirtyCache,
+		TrieDirtyLimit:      ethconfig.Defaults.TrieDirtyCache,
 		TrieDirtyDisabled:   ctx.GlobalString(GCModeFlag.Name) == "archive",
-		TrieTimeLimit:       xpsconfig.Defaults.TrieTimeout,
-		SnapshotLimit:       xpsconfig.Defaults.SnapshotCache,
+		TrieTimeLimit:       ethconfig.Defaults.TrieTimeout,
+		SnapshotLimit:       ethconfig.Defaults.SnapshotCache,
 		Preimages:           ctx.GlobalBool(CachePreimagesFlag.Name),
 	}
 	if cache.TrieDirtyDisabled && !cache.Preimages {
@@ -2018,6 +1951,9 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	chain, err = core.NewBlockChain(chainDb, cache, config, engine, vmcfg, nil, nil)
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
+	}
+	if ethereum != nil {
+		ethereum.SetBlockchain(chain)
 	}
 	return chain, chainDb
 }
@@ -2042,11 +1978,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 // This is a temporary function used for migrating old command/flags to the
 // new format.
 //
-// e.g. gpay account new --keystore /tmp/mykeystore --lightkdf
+// e.g. geth account new --keystore /tmp/mykeystore --lightkdf
 //
 // is equivalent after calling this method with:
 //
-// gpay --keystore /tmp/mykeystore --lightkdf account new
+// geth --keystore /tmp/mykeystore --lightkdf account new
 //
 // This allows the use of the existing configuration functionality.
 // When all flags are migrated this function can be removed and the existing
