@@ -144,7 +144,7 @@ var (
 	}
 	MainnetFlag = cli.BoolFlag{
 		Name:  "mainnet",
-		Usage: "Ethereum mainnet",
+		Usage: "xPayments mainnet",
 	}
 	GoerliFlag = cli.BoolFlag{
 		Name:  "goerli",
@@ -158,13 +158,13 @@ var (
 		Name:  "ropsten",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
-	MumbaiFlag = cli.BoolFlag{
-		Name:  "bor-mumbai",
-		Usage: "Mumbai network: pre-configured proof-of-stake test network",
+	BerylliumFlag = cli.BoolFlag{
+		Name:  "beryllium",
+		Usage: "Beryllium network: pre-configured proof-of-stake test network",
 	}
-	BorMainnetFlag = cli.BoolFlag{
-		Name:  "bor-mainnet",
-		Usage: "Bor mainnet",
+	XPSMainnetFlag = cli.BoolFlag{
+		Name:  "xpayments",
+		Usage: "xPayments mainnet",
 	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
@@ -386,9 +386,9 @@ var (
 		Value: ethconfig.Defaults.TxPool.Lifetime,
 	}
 	// Performance tuning settings
-	BorLogsFlag = cli.BoolFlag{
-		Name:  "bor.logs",
-		Usage: "Enable bor logs retrieval",
+	XPSLogsFlag = cli.BoolFlag{
+		Name:  "xps.logs",
+		Usage: "Enable xps logs retrieval",
 	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
@@ -813,9 +813,13 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(GoerliFlag.Name) {
 			return filepath.Join(path, "goerli")
 		}
-		if ctx.GlobalBool(MumbaiFlag.Name) || ctx.GlobalBool(BorMainnetFlag.Name) {
+		if ctx.GlobalBool(XPSMainnetFlag.Name) {
 			homeDir, _ := os.UserHomeDir()
-			return filepath.Join(homeDir, "/.bor/data")
+			return filepath.Join(homeDir, "/.xpayments/data")
+		}
+		if ctx.GlobalBool(BerylliumFlag.Name) {
+			homeDir, _ := os.UserHomeDir()
+			return filepath.Join(homeDir, "/.beryllium/data")
 		}
 		return path
 	}
@@ -869,10 +873,10 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.RinkebyBootnodes
 	case ctx.GlobalBool(GoerliFlag.Name):
 		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(MumbaiFlag.Name):
-		urls = params.MumbaiBootnodes
-	case ctx.GlobalBool(BorMainnetFlag.Name):
-		urls = params.BorMainnetBootnodes
+	case ctx.GlobalBool(BerylliumFlag.Name):
+		urls = params.BerylliumBootnodes
+	case ctx.GlobalBool(XPSMainnetFlag.Name):
+		urls = params.XPSMainnetBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1292,12 +1296,12 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
 	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-	case ctx.GlobalBool(MumbaiFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+	case ctx.GlobalBool(BerylliumFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		homeDir, _ := os.UserHomeDir()
-		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
-	case ctx.GlobalBool(BorMainnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(homeDir, "/.beryllium/data")
+	case ctx.GlobalBool(XPSMainnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		homeDir, _ := os.UserHomeDir()
-		cfg.DataDir = filepath.Join(homeDir, "/.bor/data")
+		cfg.DataDir = filepath.Join(homeDir, "/.xpayments/data")
 	}
 }
 
@@ -1483,7 +1487,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, MumbaiFlag, BorMainnetFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, BerylliumFlag, XPSMainnetFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1505,8 +1509,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
 
-	if ctx.GlobalIsSet(BorLogsFlag.Name) {
-		cfg.BorLogs = ctx.GlobalBool(BorLogsFlag.Name)
+	if ctx.GlobalIsSet(XPSLogsFlag.Name) {
+		cfg.XPSLogs = ctx.GlobalBool(XPSLogsFlag.Name)
 	}
 
 	// Cap the cache allowance and tune the garbage collector
@@ -1643,20 +1647,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(MumbaiFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 80001
-		}
-		cfg.Genesis = core.DefaultMumbaiGenesisBlock()
-	case ctx.GlobalBool(BorMainnetFlag.Name):
-		if !ctx.GlobalIsSet(BorMainnetFlag.Name) {
-			cfg.NetworkId = 137
-		}
-		cfg.Genesis = core.DefaultBorMainnetGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
 		}
+	case ctx.GlobalBool(XPSMainnetFlag.Name):
+		if !ctx.GlobalIsSet(XPSMainnetFlag.Name) {
+			cfg.NetworkId = 34323
+		}
+		cfg.Genesis = core.DefaultXPSMainnetGenesisBlock()
+	case ctx.GlobalBool(BerylliumFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 34324
+		}
+		cfg.Genesis = core.DefaultBerylliumGenesisBlock()
 		cfg.SyncMode = downloader.FullSync
 		// Create new developer account or reuse existing one
 		var (
@@ -1723,21 +1727,21 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 	}
 }
 
-// RegisterEthService adds an Ethereum client to the stack.
+// RegisterEthService adds an xPayments client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
 func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
-			Fatalf("Failed to register the Ethereum service: %v", err)
+			Fatalf("Failed to register the xPayments service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		return backend.ApiBackend, nil
 	}
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		Fatalf("Failed to register the xPayments service: %v", err)
 	}
 	if cfg.LightServ > 0 {
 		_, err := les.NewLesServer(stack, backend, cfg)
@@ -1749,11 +1753,11 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	return backend.APIBackend, backend
 }
 
-// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
+// RegisterEthStatsService configures the xPayments Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
 	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
-		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+		Fatalf("Failed to register the xPayments Stats service: %v", err)
 	}
 }
 
@@ -1873,10 +1877,10 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultRinkebyGenesisBlock()
 	case ctx.GlobalBool(GoerliFlag.Name):
 		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(MumbaiFlag.Name):
-		genesis = core.DefaultMumbaiGenesisBlock()
-	case ctx.GlobalBool(BorMainnetFlag.Name):
-		genesis = core.DefaultBorMainnetGenesisBlock()
+	case ctx.GlobalBool(BerylliumFlag.Name):
+		genesis = core.DefaultBerylliumGenesisBlock()
+	case ctx.GlobalBool(XPSMainnetFlag.Name):
+		genesis = core.DefaultXPSMainnetGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -1896,18 +1900,13 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if err != nil {
 		Fatalf("%v", err)
 	}
+
 	var engine consensus.Engine
-	var ethereum *eth.Ethereum
+	var xpayments *eth.Ethereum
+
 	if config.Clique != nil {
 		engine = clique.New(config.Clique, chainDb)
-	} else if config.Bor != nil {
-		ethereum = CreateBorEthereum(&eth.Config{
-			Genesis:         genesis,
-			HeimdallURL:     ctx.GlobalString(HeimdallURLFlag.Name),
-			WithoutHeimdall: ctx.GlobalBool(WithoutHeimdallFlag.Name),
-		})
-		engine = ethereum.Engine()
-	} else {
+	} else if config.Ethash != nil {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
 			engine = ethash.New(ethash.Config{
@@ -1921,7 +1920,17 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 				DatasetsLockMmap: ethconfig.Defaults.Ethash.DatasetsLockMmap,
 			}, nil, false)
 		}
+	} else {
+		// XPoS Default
+		xpayments = CreateXPoSEthereum(&eth.Config{
+			Genesis:        genesis,
+			GenisysURL:     ctx.GlobalString(GenisysURLFlag.Name),
+			WithoutGenisys: ctx.GlobalBool(WithoutGenisysFlag.Name),
+		})
+
+		engine = xpayments.Engine()
 	}
+
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
 	}
@@ -1955,8 +1964,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 	if err != nil {
 		Fatalf("Can't create BlockChain: %v", err)
 	}
-	if ethereum != nil {
-		ethereum.SetBlockchain(chain)
+	if xpayments != nil {
+		xpayments.SetBlockchain(chain)
 	}
 	return chain, chainDb
 }

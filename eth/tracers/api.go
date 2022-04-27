@@ -762,8 +762,8 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
 	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if tx == nil {
-		// For BorTransaction, there will be no trace available
-		tx, _, _, _ = rawdb.ReadBorTransaction(api.backend.ChainDb(), hash)
+		// For XPSTransaction, there will be no trace available
+		tx, _, _, _ = rawdb.ReadTransaction(api.backend.ChainDb(), hash)
 		if tx != nil {
 			return &ethapi.ExecutionResult{
 				StructLogs: make([]ethapi.StructLogRes, 0),

@@ -33,8 +33,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/bor"
 	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpos"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/bloombits"
 	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
@@ -159,7 +159,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		p2pServer:         stack.Server(),
 	}
 
-	// START: Bor changes
+	// START: XPS changes
 	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
 	if eth.APIBackend.allowUnprotectedTxs {
 		log.Info("Unprotected transactions allowed")
@@ -173,7 +173,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	// create eth api and set engine
 	ethAPI := ethapi.NewPublicBlockChainAPI(eth.APIBackend)
 	eth.engine = ethconfig.CreateConsensusEngine(stack, chainConfig, config, chainDb, ethAPI)
-	// END: Bor changes
+	// END: XPS changes
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -214,9 +214,9 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	eth.engine.VerifyHeader(eth.blockchain, eth.blockchain.CurrentHeader(), true) // TODO think on it
 
-	// BOR changes
+	// XPS changes
 	eth.APIBackend.gpo.ProcessCache()
-	// BOR changes
+	// XPS changes
 
 	// Rewind the chain in case of an incompatible config upgrade.
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
@@ -293,7 +293,7 @@ func makeExtraData(extra []byte) []byte {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
 			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
-			"bor",
+			"xps",
 			runtime.Version(),
 			runtime.GOOS,
 		})
@@ -313,12 +313,12 @@ func (s *Ethereum) APIs() []rpc.API {
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
-	// BOR change starts
+	// XPS change starts
 	// set genesis to public filter api
-	publicFilterAPI := filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute, s.config.BorLogs)
+	publicFilterAPI := filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute, s.config.XPSLogs)
 	// avoiding constructor changed by introducing new method to set genesis
 	publicFilterAPI.SetChainConfig(s.blockchain.Config())
-	// BOR change ends
+	// XPS change ends
 
 	// Append all the local APIs and return
 	return append(apis, []rpc.API{
@@ -345,7 +345,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   publicFilterAPI, // BOR related change
+			Service:   publicFilterAPI, // XPS related change
 			Public:    true,
 		}, {
 			Namespace: "admin",
@@ -496,13 +496,13 @@ func (s *Ethereum) StartMining(threads int) error {
 			}
 			clique.Authorize(eb, wallet.SignData)
 		}
-		if bor, ok := s.engine.(*bor.Bor); ok {
+		if xpos, ok := s.engine.(*xpos.XPoS); ok {
 			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 			if wallet == nil || err != nil {
 				log.Error("Etherbase account unavailable locally", "err", err)
 				return fmt.Errorf("signer missing: %v", err)
 			}
-			bor.Authorize(eb, wallet.SignData)
+			xpos.Authorize(eb, wallet.SignData)
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
@@ -598,7 +598,7 @@ func (s *Ethereum) Stop() error {
 }
 
 //
-// Bor related methods
+// XPS related methods
 //
 
 // SetBlockchain set blockchain while testing

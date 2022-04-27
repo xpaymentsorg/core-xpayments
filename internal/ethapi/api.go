@@ -626,13 +626,13 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 
 	var txHash common.Hash
 
-	borReceipt := rawdb.ReadBorReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64())
-	if borReceipt != nil {
-		receipts = append(receipts, borReceipt)
-		txHash = types.GetDerivedBorTxHash(types.BorReceiptKey(block.Number().Uint64(), block.Hash()))
+	xposReceipt := rawdb.ReadXPoSReceipt(s.b.ChainDb(), block.Hash(), block.NumberU64())
+	if xposReceipt != nil {
+		receipts = append(receipts, xposReceipt)
+		txHash = types.GetDerivedXPoSTxHash(types.XPoSReceiptKey(block.Number().Uint64(), block.Hash()))
 		if txHash != (common.Hash{}) {
-			borTx, _, _, _, _ := s.b.GetBorBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
-			txs = append(txs, borTx)
+			xposTx, _, _, _, _ := s.b.GetXPoSBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
+			txs = append(txs, xposTx)
 		}
 	}
 
@@ -672,7 +672,7 @@ func (s *PublicBlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context,
 		if receipt.Logs == nil {
 			fields["logs"] = [][]*types.Log{}
 		}
-		if borReceipt != nil {
+		if xposReceipt != nil {
 			fields["transactionHash"] = txHash
 		}
 		// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
@@ -822,9 +822,9 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, number rpc.B
 			}
 		}
 
-		// append marshalled bor transaction
+		// append marshalled xpos transaction
 		if err == nil && response != nil {
-			response = s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx)
+			response = s.appendRPCMarshalXPoSTransaction(ctx, block, response, fullTx)
 		}
 
 		return response, err
@@ -838,9 +838,9 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Ha
 	block, err := s.b.BlockByHash(ctx, hash)
 	if block != nil {
 		response, err := s.rpcMarshalBlock(ctx, block, true, fullTx)
-		// append marshalled bor transaction
+		// append marshalled xpos transaction
 		if err == nil && response != nil {
-			return s.appendRPCMarshalBorTransaction(ctx, block, response, fullTx), err
+			return s.appendRPCMarshalXPoSTransaction(ctx, block, response, fullTx), err
 		}
 		return response, err
 	}
@@ -1016,9 +1016,9 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		return nil, err
 	}
 
-	// If the timer caused an abort, return an appropriate error message
+	// If the timer caused an axpost, return an appropriate error message
 	if evm.Cancelled() {
-		return nil, fmt.Errorf("execution aborted (timeout = %v)", timeout)
+		return nil, fmt.Errorf("execution axposted (timeout = %v)", timeout)
 	}
 	if err != nil {
 		return result, fmt.Errorf("err: %w (supplied gas %d)", err, msg.Gas())
@@ -1647,7 +1647,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionCount(ctx context.Context, addr
 
 // GetTransactionByHash returns the transaction for the given hash
 func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, hash common.Hash) (*RPCTransaction, error) {
-	borTx := false
+	xposTx := false
 
 	// Try to return an already finalized transaction
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
@@ -1655,13 +1655,13 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 
 		return nil, err
 	}
-	// fetch bor block tx if necessary
+	// fetch xpos block tx if necessary
 	if tx == nil {
-		if tx, blockHash, blockNumber, index, err = s.b.GetBorBlockTransaction(ctx, hash); err != nil {
+		if tx, blockHash, blockNumber, index, err = s.b.GetXPoSBlockTransaction(ctx, hash); err != nil {
 			return nil, err
 		}
 
-		borTx = true
+		xposTx = true
 	}
 
 	if tx != nil {
@@ -1671,9 +1671,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 		}
 		resultTx := newRPCTransaction(tx, blockHash, blockNumber, index, header.BaseFee, s.b.ChainConfig())
 
-		if borTx {
+		if xposTx {
 			// newRPCTransaction calculates hash based on RLP of the transaction data.
-			// In case of bor block tx, we need simple derived tx hash (same as function argument) instead of RLP hash
+			// In case of xpos block tx, we need simple derived tx hash (same as function argument) instead of RLP hash
 			resultTx.Hash = hash
 		}
 
@@ -1697,7 +1697,7 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 	}
 	if tx == nil {
 		if tx = s.b.GetPoolTransaction(hash); tx == nil {
-			// Transaction not found anywhere, abort
+			// Transaction not found anywhere, axpost
 			return nil, nil
 		}
 	}
@@ -1707,12 +1707,12 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
-	borTx := false
+	xposTx := false
 
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(s.b.ChainDb(), hash)
 	if tx == nil {
-		tx, blockHash, blockNumber, index = rawdb.ReadBorTransaction(s.b.ChainDb(), hash)
-		borTx = true
+		tx, blockHash, blockNumber, index = rawdb.ReadXPoSTransaction(s.b.ChainDb(), hash)
+		xposTx = true
 	}
 
 	if tx == nil {
@@ -1721,9 +1721,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 
 	var receipt *types.Receipt
 
-	if borTx {
-		// Fetch bor block receipt
-		receipt = rawdb.ReadBorReceipt(s.b.ChainDb(), blockHash, blockNumber)
+	if xposTx {
+		// Fetch xpos block receipt
+		receipt = rawdb.ReadXPoSReceipt(s.b.ChainDb(), blockHash, blockNumber)
 	} else {
 		receipts, err := s.b.GetReceipts(ctx, blockHash)
 		if err != nil {

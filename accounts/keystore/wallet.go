@@ -22,7 +22,7 @@ package keystore
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum"
+	ethereum "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"

@@ -182,18 +182,18 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 				config.EthereumNetworkID = 5
 			}
 		}
-		// If we have the Bor Mainnet, hard code the chain configs too
-		if config.EthereumGenesis == BorMainnetGenesis() {
-			genesis.Config = params.BorMainnetChainConfig
+		// If we have the XPS Mainnet, hard code the chain configs too
+		if config.EthereumGenesis == XPSMainnetGenesis() {
+			genesis.Config = params.XPSMainnetChainConfig
 			if config.EthereumNetworkID == 1 {
-				config.EthereumNetworkID = 137
+				config.EthereumNetworkID = 34323
 			}
 		}
-		// If we have the Mumbai testnet, hard code the chain configs too
-		if config.EthereumGenesis == MumbaiGenesis() {
-			genesis.Config = params.MumbaiChainConfig
+		// If we have the Beryllium testnet, hard code the chain configs too
+		if config.EthereumGenesis == BerylliumGenesis() {
+			genesis.Config = params.BerylliumChainConfig
 			if config.EthereumNetworkID == 1 {
-				config.EthereumNetworkID = 80001
+				config.EthereumNetworkID = 34324
 			}
 		}
 	}

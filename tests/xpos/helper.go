@@ -1,0 +1,200 @@
+// Copyright 2022 The go-xpayments Authors
+// This file is part of the go-xpayments library.
+//
+// Copyright 2022 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+package xpos
+
+import (
+	"encoding/hex"
+	"encoding/json"
+	"io/ioutil"
+	"math/big"
+	"sort"
+	"testing"
+
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/consensus/misc"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpos"
+	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/crypto/secp256k1"
+	"github.com/xpaymentsorg/go-xpayments/eth"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/params"
+)
+
+var (
+	// The genesis for tests was generated with following parameters
+	extraSeal = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+
+	// Only this account is a validator for the 0th span
+	privKey = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+	key, _  = crypto.HexToECDSA(privKey)
+	addr    = crypto.PubkeyToAddress(key.PublicKey) // 0x71562b71999873DB5b286dF957af199Ec94617F7
+
+	// This account is one the validators for 1st span (0-indexed)
+	privKey2 = "9b28f36fbd67381120752d6172ecdcf10e06ab2d9a1367aac00cdcd6ac7855d3"
+	key2, _  = crypto.HexToECDSA(privKey2)
+	addr2    = crypto.PubkeyToAddress(key2.PublicKey) // 0x9fB29AAc15b9A4B7F17c3385939b007540f4d791
+
+	validatorHeaderBytesLength        = common.AddressLength + 20 // address + power
+	sprintSize                 uint64 = 4
+	spanSize                   uint64 = 8
+)
+
+type initializeData struct {
+	genesis  *core.Genesis
+	ethereum *eth.Ethereum
+}
+
+func buildEthereumInstance(t *testing.T, db ethdb.Database) *initializeData {
+	genesisData, err := ioutil.ReadFile("./testdata/genesis.json")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	gen := &core.Genesis{}
+	if err := json.Unmarshal(genesisData, gen); err != nil {
+		t.Fatalf("%s", err)
+	}
+	ethConf := &eth.Config{
+		Genesis: gen,
+	}
+	ethConf.Genesis.MustCommit(db)
+
+	ethereum := utils.CreateXPoSEthereum(ethConf)
+	if err != nil {
+		t.Fatalf("failed to register Ethereum protocol: %v", err)
+	}
+
+	ethConf.Genesis.MustCommit(ethereum.ChainDb())
+	return &initializeData{
+		genesis:  gen,
+		ethereum: ethereum,
+	}
+}
+
+func insertNewBlock(t *testing.T, chain *core.BlockChain, block *types.Block) {
+	if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+		t.Fatalf("%s", err)
+	}
+}
+
+func buildNextBlock(t *testing.T, _xpos *xpos.XPoS, chain *core.BlockChain, block *types.Block, signer []byte, xposConfig *params.XPoSConfig) *types.Block {
+	header := block.Header()
+	header.Number.Add(header.Number, big.NewInt(1))
+	number := header.Number.Uint64()
+
+	if signer == nil {
+		signer = getSignerKey(header.Number.Uint64())
+	}
+
+	header.ParentHash = block.Hash()
+	header.Time += xpos.CalcProducerDelay(header.Number.Uint64(), 0, xposConfig)
+	header.Extra = make([]byte, 32+65) // vanity + extraSeal
+
+	currentValidators := []*xpos.Validator{xpos.NewValidator(addr, 10)}
+
+	isSpanEnd := (number+1)%spanSize == 0
+	isSpanStart := number%spanSize == 0
+	isSprintEnd := (header.Number.Uint64()+1)%sprintSize == 0
+	if isSpanEnd {
+		_, genisysSpan := loadSpanFromFile(t)
+		// this is to stash the validator bytes in the header
+		currentValidators = genisysSpan.ValidatorSet.Validators
+	} else if isSpanStart {
+		header.Difficulty = new(big.Int).SetInt64(3)
+	}
+	if isSprintEnd {
+		sort.Sort(xpos.ValidatorsByAddress(currentValidators))
+		validatorBytes := make([]byte, len(currentValidators)*validatorHeaderBytesLength)
+		header.Extra = make([]byte, 32+len(validatorBytes)+65) // vanity + validatorBytes + extraSeal
+		for i, val := range currentValidators {
+			copy(validatorBytes[i*validatorHeaderBytesLength:], val.HeaderBytes())
+		}
+		copy(header.Extra[32:], validatorBytes)
+	}
+
+	if chain.Config().IsLondon(header.Number) {
+		header.BaseFee = misc.CalcBaseFee(chain.Config(), block.Header())
+		if !chain.Config().IsLondon(block.Number()) {
+			parentGasLimit := block.GasLimit() * params.ElasticityMultiplier
+			header.GasLimit = core.CalcGasLimit(parentGasLimit, parentGasLimit)
+		}
+	}
+
+	state, err := chain.State()
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	_, err = _xpos.FinalizeAndAssemble(chain, header, state, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	sign(t, header, signer, xposConfig)
+	return types.NewBlockWithHeader(header)
+}
+
+func sign(t *testing.T, header *types.Header, signer []byte, c *params.XPoSConfig) {
+	sig, err := secp256k1.Sign(crypto.Keccak256(xpos.XPoSRLP(header, c)), signer)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+}
+
+func stateSyncEventsPayload(t *testing.T) *xpos.ResponseWithHeight {
+	stateData, err := ioutil.ReadFile("./testdata/states.json")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	res := &xpos.ResponseWithHeight{}
+	if err := json.Unmarshal(stateData, res); err != nil {
+		t.Fatalf("%s", err)
+	}
+	return res
+}
+
+func loadSpanFromFile(t *testing.T) (*xpos.ResponseWithHeight, *xpos.GenisysSpan) {
+	spanData, err := ioutil.ReadFile("./testdata/span.json")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	res := &xpos.ResponseWithHeight{}
+	if err := json.Unmarshal(spanData, res); err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	genisysSpan := &xpos.GenisysSpan{}
+	if err := json.Unmarshal(res.Result, genisysSpan); err != nil {
+		t.Fatalf("%s", err)
+	}
+	return res, genisysSpan
+}
+
+func getSignerKey(number uint64) []byte {
+	signerKey := privKey
+	isSpanStart := number%spanSize == 0
+	if isSpanStart {
+		// validator set in the new span has changed
+		signerKey = privKey2
+	}
+	_key, _ := hex.DecodeString(signerKey)
+	return _key
+}

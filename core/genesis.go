@@ -257,10 +257,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RinkebyChainConfig
 	case ghash == params.GoerliGenesisHash:
 		return params.GoerliChainConfig
-	case ghash == params.MumbaiGenesisHash:
-		return params.MumbaiChainConfig
-	case ghash == params.BorMainnetGenesisHash:
-		return params.BorMainnetChainConfig
+	case ghash == params.BerylliumGenesisHash:
+		return params.BerylliumChainConfig
+	case ghash == params.XPSMainnetGenesisHash:
+		return params.XPSMainnetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
@@ -414,31 +414,31 @@ func DefaultGoerliGenesisBlock() *Genesis {
 	}
 }
 
-// DefaultMumbaiGenesisBlock returns the Mumbai network genesis block.
-func DefaultMumbaiGenesisBlock() *Genesis {
+// DefaultBerylliumGenesisBlock returns the Mumbai network genesis block.
+func DefaultBerylliumGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.MumbaiChainConfig,
+		Config:     params.BerylliumChainConfig,
 		Nonce:      0,
 		Timestamp:  1558348305,
 		GasLimit:   10000000,
 		Difficulty: big.NewInt(1),
 		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		Alloc:      readPrealloc("allocs/mumbai.json"),
+		Alloc:      readPrealloc("allocs/beryllium.json"),
 	}
 }
 
-//DefaultBorMainnet returns the Bor Mainnet network gensis block.
-func DefaultBorMainnetGenesisBlock() *Genesis {
+//DefaultXPSMainnet returns the XPS Mainnet network gensis block.
+func DefaultXPSMainnetGenesisBlock() *Genesis {
 	return &Genesis{
-		Config:     params.BorMainnetChainConfig,
+		Config:     params.XPSMainnetChainConfig,
 		Nonce:      0,
 		Timestamp:  1590824836,
 		GasLimit:   10000000,
 		Difficulty: big.NewInt(1),
 		Mixhash:    common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 		Coinbase:   common.HexToAddress("0x0000000000000000000000000000000000000000"),
-		Alloc:      readPrealloc("allocs/bor_mainnet.json"),
+		Alloc:      readPrealloc("allocs/xps_mainnet.json"),
 	}
 }
 

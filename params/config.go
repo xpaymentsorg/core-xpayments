@@ -36,8 +36,8 @@ var (
 	RopstenGenesisHash    = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
 	RinkebyGenesisHash    = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash     = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
-	MumbaiGenesisHash     = common.HexToHash("0x7b66506a9ebdbf30d32b43c5f15a3b1216269a1ec3a75aa3182b86176a2b1ca7")
-	BorMainnetGenesisHash = common.HexToHash("0xa9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b")
+	XPSMainnetGenesisHash = common.HexToHash("")
+	BerylliumGenesisHash  = common.HexToHash("")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -227,8 +227,8 @@ var (
 		Threshold: 2,
 	}
 
-	// BorTestChainConfig contains the chain parameters to run a node on the Test network.
-	BorTestChainConfig = &ChainConfig{
+	// XPSTestChainConfig contains the chain parameters to run a node on the Test network.
+	XPSTestChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(80001),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
@@ -244,7 +244,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
-		Bor: &BorConfig{
+		XPoS: &XPoSConfig{
 			Period: map[string]uint64{
 				"0": 2,
 			},
@@ -261,8 +261,8 @@ var (
 		},
 	}
 
-	// MumbaiChainConfig contains the chain parameters to run a node on the Mumbai test network.
-	MumbaiChainConfig = &ChainConfig{
+	// BerylliumChainConfig contains the chain parameters to run a node on the Beryllium test network.
+	BerylliumChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(80001),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
@@ -278,7 +278,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(2722000),
 		BerlinBlock:         big.NewInt(13996000),
 		LondonBlock:         big.NewInt(22640000),
-		Bor: &BorConfig{
+		XPoS: &XPoSConfig{
 			JaipurBlock: 22770000,
 			Period: map[string]uint64{
 				"0": 2,
@@ -305,7 +305,7 @@ var (
 		},
 	}
 
-	BorMainnetChainConfig = &ChainConfig{
+	XPSMainnetChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(137),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
@@ -321,7 +321,7 @@ var (
 		MuirGlacierBlock:    big.NewInt(3395000),
 		BerlinBlock:         big.NewInt(14750000),
 		LondonBlock:         big.NewInt(23850000),
-		Bor: &BorConfig{
+		XPoS: &XPoSConfig{
 			JaipurBlock: 23850000,
 			Period: map[string]uint64{
 				"0": 2,
@@ -358,21 +358,22 @@ var (
 			},
 		},
 	}
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
+	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, &XPoSConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &BorConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, &XPoSConfig{BurntContract: map[string]string{"0": "0x000000000000000000000000000000000000dead"}}}
 	TestRules       = TestChainConfig.Rules(new(big.Int))
 )
 
@@ -459,7 +460,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	Bor    *BorConfig    `json:"bor,omitempty"`
+	XPoS   *XPoSConfig   `json:"xpos,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -481,8 +482,8 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
-// BorConfig is the consensus engine configs for Matic bor based sealing.
-type BorConfig struct {
+// XPoSConfig is the consensus engine configs for xPayments XPoS based sealing.
+type XPoSConfig struct {
 	Period                   map[string]uint64      `json:"period"`                   // Number of seconds between blocks to enforce
 	ProducerDelay            uint64                 `json:"producerDelay"`            // Number of seconds delay between two producer interval
 	Sprint                   uint64                 `json:"sprint"`                   // Epoch length to proposer
@@ -496,23 +497,23 @@ type BorConfig struct {
 }
 
 // String implements the stringer interface, returning the consensus engine details.
-func (b *BorConfig) String() string {
-	return "bor"
+func (b *XPoSConfig) String() string {
+	return "xpos"
 }
 
-func (c *BorConfig) CalculateBackupMultiplier(number uint64) uint64 {
-	return c.calculateBorConfigHelper(c.BackupMultiplier, number)
+func (c *XPoSConfig) CalculateBackupMultiplier(number uint64) uint64 {
+	return c.calculateXPSConfigHelper(c.BackupMultiplier, number)
 }
 
-func (c *BorConfig) CalculatePeriod(number uint64) uint64 {
-	return c.calculateBorConfigHelper(c.Period, number)
+func (c *XPoSConfig) CalculatePeriod(number uint64) uint64 {
+	return c.calculateXPSConfigHelper(c.Period, number)
 }
 
-func (c *BorConfig) IsJaipur(number uint64) bool {
+func (c *XPoSConfig) IsJaipur(number uint64) bool {
 	return number >= c.JaipurBlock
 }
 
-func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uint64) uint64 {
+func (c *XPoSConfig) calculateXPSConfigHelper(field map[string]uint64, number uint64) uint64 {
 	keys := make([]string, 0, len(field))
 	for k := range field {
 		keys = append(keys, k)
@@ -528,7 +529,7 @@ func (c *BorConfig) calculateBorConfigHelper(field map[string]uint64, number uin
 	return field[keys[len(keys)-1]]
 }
 
-func (c *BorConfig) CalculateBurntContract(number uint64) string {
+func (c *XPoSConfig) CalculateBurntContract(number uint64) string {
 	keys := make([]string, 0, len(c.BurntContract))
 	for k := range c.BurntContract {
 		keys = append(keys, k)
@@ -552,8 +553,8 @@ func (c *ChainConfig) String() string {
 		engine = c.Ethash
 	case c.Clique != nil:
 		engine = c.Clique
-	case c.Bor != nil:
-		engine = c.Bor
+	case c.XPoS != nil:
+		engine = c.XPoS
 	default:
 		engine = "unknown"
 	}

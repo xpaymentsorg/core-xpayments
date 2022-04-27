@@ -146,7 +146,7 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 		freezer.tables[name] = table
 	}
 
-	// Adjust table length for bor-receipt freezer for already synced nodes.
+	// Adjust table length for xpos-receipt freezer for already synced nodes.
 	//
 	// Since, table only supports sequential data, this will fill empty-data upto current
 	// synced block (till current total header number).
@@ -154,8 +154,8 @@ func newFreezer(datadir string, namespace string, readonly bool, maxTableSize ui
 	// This way they don't have to sync again from block 0 and still be compatible
 	// for block logs for future blocks. Note that already synced nodes
 	// won't have past block logs. Newly synced node will have all the data.
-	if _, ok := freezer.tables[freezerBorReceiptTable]; ok {
-		if err := freezer.tables[freezerBorReceiptTable].Fill(freezer.tables[freezerHeaderTable].items); err != nil {
+	if _, ok := freezer.tables[freezerXPoSReceiptTable]; ok {
+		if err := freezer.tables[freezerXPoSReceiptTable].Fill(freezer.tables[freezerHeaderTable].items); err != nil {
 			return nil, err
 		}
 	}
@@ -547,10 +547,10 @@ func (f *freezer) freezeRange(nfdb *nofreezedb, number, limit uint64) (hashes []
 				return fmt.Errorf("can't write td to freezer: %v", err)
 			}
 
-			// bor block receipt
-			borBlockReceipt := ReadBorReceiptRLP(nfdb, hash, number)
-			if err := op.AppendRaw(freezerBorReceiptTable, number, borBlockReceipt); err != nil {
-				return fmt.Errorf("can't write bor-receipt to freezer: %v", err)
+			// xpos block receipt
+			XPSBlockReceipt := ReadXPoSReceiptRLP(nfdb, hash, number)
+			if err := op.AppendRaw(freezerXPoSReceiptTable, number, XPSBlockReceipt); err != nil {
+				return fmt.Errorf("can't write xpos-receipt to freezer: %v", err)
 			}
 
 			hashes = append(hashes, hash)

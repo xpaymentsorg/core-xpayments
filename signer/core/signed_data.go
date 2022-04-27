@@ -63,8 +63,8 @@ var (
 		accounts.MimetypeClique,
 		0x02,
 	}
-	ApplicationBor = SigFormat{
-		accounts.MimetypeBor,
+	ApplicationXPoS = SigFormat{
+		accounts.MimetypeXPoS,
 		0x10,
 	}
 	TextPlain = SigFormat{

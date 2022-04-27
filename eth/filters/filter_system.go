@@ -112,7 +112,7 @@ type EventSystem struct {
 	rmLogsCh      chan core.RemovedLogsEvent // Channel to receive removed log event
 	chainCh       chan core.ChainEvent       // Channel to receive new chain event
 
-	// Bor related subscription and channels
+	// XPS related subscription and channels
 	stateSyncSub event.Subscription       // Subscription for new state event
 	stateSyncCh  chan core.StateSyncEvent // Channel to receive deposit state change event
 }

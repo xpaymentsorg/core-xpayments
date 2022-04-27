@@ -772,11 +772,11 @@ func WriteBlock(db ethdb.KeyValueWriter, block *types.Block) {
 }
 
 // WriteAncientBlock writes entire block data into ancient store and returns the total written size.
-func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, borReceipts []types.Receipts, td *big.Int) (int64, error) {
+func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts []types.Receipts, XPoSReceipts []types.Receipts, td *big.Int) (int64, error) {
 	var (
-		tdSum         = new(big.Int).Set(td)
-		stReceipts    []*types.ReceiptForStorage
-		borStReceipts []*types.ReceiptForStorage
+		tdSum          = new(big.Int).Set(td)
+		stReceipts     []*types.ReceiptForStorage
+		XPoSStReceipts []*types.ReceiptForStorage
 	)
 	return db.ModifyAncients(func(op ethdb.AncientWriteOp) error {
 		for i, block := range blocks {
@@ -786,17 +786,17 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 				stReceipts = append(stReceipts, (*types.ReceiptForStorage)(receipt))
 			}
 
-			// Convert bor receipts to storage format and sum up total difficulty.
-			borStReceipts = borStReceipts[:0]
-			for _, borReceipt := range borReceipts[i] {
-				borStReceipts = append(borStReceipts, (*types.ReceiptForStorage)(borReceipt))
+			// Convert xpos receipts to storage format and sum up total difficulty.
+			XPoSStReceipts = XPoSStReceipts[:0]
+			for _, XPoSReceipt := range XPoSReceipts[i] {
+				XPoSStReceipts = append(XPoSStReceipts, (*types.ReceiptForStorage)(XPoSReceipt))
 			}
 
 			header := block.Header()
 			if i > 0 {
 				tdSum.Add(tdSum, header.Difficulty)
 			}
-			if err := writeAncientBlock(op, block, header, stReceipts, borStReceipts, tdSum); err != nil {
+			if err := writeAncientBlock(op, block, header, stReceipts, XPoSStReceipts, tdSum); err != nil {
 				return err
 			}
 		}
@@ -804,7 +804,7 @@ func WriteAncientBlocks(db ethdb.AncientWriter, blocks []*types.Block, receipts 
 	})
 }
 
-func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage, borReceipts []*types.ReceiptForStorage, td *big.Int) error {
+func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *types.Header, receipts []*types.ReceiptForStorage, XPoSReceipts []*types.ReceiptForStorage, td *big.Int) error {
 	num := block.NumberU64()
 	if err := op.AppendRaw(freezerHashTable, num, block.Hash().Bytes()); err != nil {
 		return fmt.Errorf("can't add block %d hash: %v", num, err)
@@ -821,8 +821,8 @@ func writeAncientBlock(op ethdb.AncientWriteOp, block *types.Block, header *type
 	if err := op.Append(freezerDifficultyTable, num, td); err != nil {
 		return fmt.Errorf("can't append block %d total difficulty: %v", num, err)
 	}
-	if err := op.Append(freezerBorReceiptTable, num, borReceipts); err != nil {
-		return fmt.Errorf("can't append block %d borReceipts: %v", num, err)
+	if err := op.Append(freezerXPoSReceiptTable, num, XPoSReceipts); err != nil {
+		return fmt.Errorf("can't append block %d XPoSReceipts: %v", num, err)
 	}
 	return nil
 }
@@ -834,8 +834,8 @@ func DeleteBlock(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
 
-	// delete bor receipt
-	DeleteBorReceipt(db, hash, number)
+	// delete xpos receipt
+	DeleteXPoSReceipt(db, hash, number)
 }
 
 // DeleteBlockWithoutNumber removes all block data associated with a hash, except
@@ -846,8 +846,8 @@ func DeleteBlockWithoutNumber(db ethdb.KeyValueWriter, hash common.Hash, number 
 	DeleteBody(db, hash, number)
 	DeleteTd(db, hash, number)
 
-	// delete bor receipt
-	DeleteBorReceipt(db, hash, number)
+	// delete xpos receipt
+	DeleteXPoSReceipt(db, hash, number)
 }
 
 const badBlockToKeep = 10

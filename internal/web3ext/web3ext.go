@@ -34,8 +34,8 @@ var Modules = map[string]string{
 	"les":      LESJs,
 	"vflux":    VfluxJs,
 
-	// Bor related apis
-	"bor": BorJs,
+	// XPS related apis
+	"xps": XPSJs,
 }
 
 const CliqueJs = `

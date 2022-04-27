@@ -33,8 +33,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
 	"github.com/gorilla/websocket"
+	ethereum "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
@@ -75,7 +75,7 @@ type backend interface {
 	Stats() (pending int, queued int)
 	SyncProgress() ethereum.SyncProgress
 
-	// Bor
+	// XPoS
 	SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription
 }
 
@@ -120,7 +120,7 @@ type Service struct {
 	headSub event.Subscription
 	txSub   event.Subscription
 
-	//bor related sub
+	//xpos related sub
 	chain2headSub event.Subscription
 }
 

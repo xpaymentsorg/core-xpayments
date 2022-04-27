@@ -71,8 +71,8 @@ It expects the genesis file as argument.`,
 			utils.RopstenFlag,
 			utils.RinkebyFlag,
 			utils.GoerliFlag,
-			utils.MumbaiFlag,
-			utils.BorMainnetFlag,
+			// utils.MumbaiFlag,
+			// utils.BorMainnetFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
@@ -108,8 +108,8 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.TxLookupLimitFlag,
 
 			// bor related flags
-			utils.HeimdallURLFlag,
-			utils.WithoutHeimdallFlag,
+			// utils.HeimdallURLFlag,
+			// utils.WithoutHeimdallFlag,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `

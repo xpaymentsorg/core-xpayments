@@ -23,7 +23,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ethereum/go-ethereum"
+	ethereum "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )

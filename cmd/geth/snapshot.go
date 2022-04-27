@@ -67,8 +67,8 @@ var (
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
-					utils.MumbaiFlag,
-					utils.BorMainnetFlag,
+					// utils.MumbaiFlag,
+					// utils.BorMainnetFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
@@ -99,8 +99,8 @@ the trie clean cache with default directory will be deleted.
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
-					utils.MumbaiFlag,
-					utils.BorMainnetFlag,
+					// utils.MumbaiFlag,
+					// utils.BorMainnetFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -121,8 +121,8 @@ In other words, this command does the snapshot to trie conversion.
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
-					utils.MumbaiFlag,
-					utils.BorMainnetFlag,
+					// utils.MumbaiFlag,
+					// utils.BorMainnetFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -145,8 +145,8 @@ It's also usable without snapshot enabled.
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
-					utils.MumbaiFlag,
-					utils.BorMainnetFlag,
+					// utils.MumbaiFlag,
+					// utils.BorMainnetFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -170,8 +170,8 @@ It's also usable without snapshot enabled.
 					utils.RopstenFlag,
 					utils.RinkebyFlag,
 					utils.GoerliFlag,
-					utils.MumbaiFlag,
-					utils.BorMainnetFlag,
+					// utils.MumbaiFlag,
+					// utils.BorMainnetFlag,
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,

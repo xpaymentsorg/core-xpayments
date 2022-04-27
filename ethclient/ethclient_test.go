@@ -237,7 +237,7 @@ func generateTestChain() (*core.Genesis, []*types.Block) {
 }
 
 func TestEthClient(t *testing.T) {
-	t.Skip("bor due to burn contract")
+	t.Skip("XPS due to burn contract")
 
 	backend, chain := newTestBackend(t)
 	client, _ := backend.Attach()

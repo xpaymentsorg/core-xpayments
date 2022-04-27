@@ -29,12 +29,12 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/event"
 )
 
-func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+func (fb *filterBackend) GetXPoSBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
 	number := rawdb.ReadHeaderNumber(fb.db, hash)
 	if number == nil {
 		return nil, nil
 	}
-	receipt := rawdb.ReadRawBorReceipt(fb.db, hash, *number)
+	receipt := rawdb.ReadRawXPoSReceipt(fb.db, hash, *number)
 	if receipt == nil {
 		return nil, nil
 	}
@@ -42,8 +42,8 @@ func (fb *filterBackend) GetBorBlockReceipt(ctx context.Context, hash common.Has
 	return receipt, nil
 }
 
-func (fb *filterBackend) GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
-	receipt, err := fb.GetBorBlockReceipt(ctx, hash)
+func (fb *filterBackend) GetXPoSBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	receipt, err := fb.GetXPoSBlockReceipt(ctx, hash)
 	if err != nil || receipt == nil {
 		return nil, err
 	}

@@ -25,7 +25,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
+	ethereum "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
@@ -94,13 +94,13 @@ type Backend interface {
 	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 
-	// Bor related APIs
+	// XPoS related APIs
 	SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription
 	GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error)
-	GetBorBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
-	GetBorBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error)
-	GetBorBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
-	GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetXPoSBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
+	GetXPoSBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error)
+	GetXPoSBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetXPoSBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
 	SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription
 
 	ChainConfig() *params.ChainConfig

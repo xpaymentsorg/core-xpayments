@@ -238,10 +238,10 @@ func ethFilter(args []string) (nodeFilter, error) {
 		filter = forkid.NewStaticFilter(params.GoerliChainConfig, params.GoerliGenesisHash)
 	case "ropsten":
 		filter = forkid.NewStaticFilter(params.RopstenChainConfig, params.RopstenGenesisHash)
-	case "bor-mumbai":
-		filter = forkid.NewStaticFilter(params.MumbaiChainConfig, params.MumbaiGenesisHash)
-	case "bor-mainnet":
-		filter = forkid.NewStaticFilter(params.BorMainnetChainConfig, params.BorMainnetGenesisHash)
+	case "beryllium":
+		filter = forkid.NewStaticFilter(params.BerylliumChainConfig, params.BerylliumGenesisHash)
+	case "xpayments":
+		filter = forkid.NewStaticFilter(params.XPSMainnetChainConfig, params.XPSMainnetGenesisHash)
 	default:
 		return nil, fmt.Errorf("unknown network %q", args[0])
 	}

@@ -62,18 +62,18 @@ func GoerliGenesis() string {
 	return string(enc)
 }
 
-// MumbaiGenesis returns the JSON spec to use for the Mumbai test network
-func MumbaiGenesis() string {
-	enc, err := json.Marshal(core.DefaultMumbaiGenesisBlock())
+// BerylliumGenesis returns the JSON spec to use for the Mumbai test network
+func BerylliumGenesis() string {
+	enc, err := json.Marshal(core.DefaultBerylliumGenesisBlock())
 	if err != nil {
 		panic(err)
 	}
 	return string(enc)
 }
 
-// BorMainnetGenesis returns the JSON spec to use for the Mumbai test network
-func BorMainnetGenesis() string {
-	enc, err := json.Marshal(core.DefaultBorMainnetGenesisBlock())
+// XPSMainnetGenesis returns the JSON spec to use for the Mumbai test network
+func XPSMainnetGenesis() string {
+	enc, err := json.Marshal(core.DefaultXPSMainnetGenesisBlock())
 	if err != nil {
 		panic(err)
 	}

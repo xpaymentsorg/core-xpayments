@@ -63,9 +63,9 @@ import (
 	"time"
 
 	"github.com/cespare/cp"
-	"github.com/ethereum/go-ethereum/crypto/signify"
-	"github.com/ethereum/go-ethereum/internal/build"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/xpaymentsorg/go-xpayments/crypto/signify"
+	"github.com/xpaymentsorg/go-xpayments/internal/build"
+	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
 var (
@@ -73,6 +73,7 @@ var (
 	gethArchiveFiles = []string{
 		"COPYING",
 		executablePath("geth"),
+		executablePath("gpay"),
 	}
 
 	// Files that end up in the geth-alltools*.zip archive.
@@ -82,6 +83,7 @@ var (
 		executablePath("bootnode"),
 		executablePath("evm"),
 		executablePath("geth"),
+		executablePath("gpay"),
 		executablePath("puppeth"),
 		executablePath("rlpdump"),
 		executablePath("clef"),
@@ -104,6 +106,10 @@ var (
 		{
 			BinaryName:  "geth",
 			Description: "Ethereum CLI client.",
+		},
+		{
+			BinaryName:  "gpay",
+			Description: "xPayments CLI client.",
 		},
 		{
 			BinaryName:  "puppeth",
@@ -1007,7 +1013,7 @@ func doAndroidArchive(cmdline []string) {
 	build.MustRun(tc.Go("mod", "download"))
 
 	// Build the Android archive and Maven resources
-	build.MustRun(gomobileTool("bind", "-ldflags", "-s -w", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/ethereum/go-ethereum/mobile"))
+	build.MustRun(gomobileTool("bind", "-ldflags", "-s -w", "--target", "android", "--javapkg", "org.ethereum", "-v", "github.com/xpaymentsorg/go-xpayments/mobile"))
 
 	if *local {
 		// If we're building locally, copy bundle to build dir and skip Maven
@@ -1136,7 +1142,7 @@ func doXCodeFramework(cmdline []string) {
 	build.MustRun(tc.Go("mod", "download"))
 
 	// Build the iOS XCode framework
-	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "-v", "github.com/ethereum/go-ethereum/mobile")
+	bind := gomobileTool("bind", "-ldflags", "-s -w", "--target", "ios", "-v", "github.com/xpaymentsorg/go-xpayments/mobile")
 
 	if *local {
 		// If we're building locally, use the build folder and stop afterwards

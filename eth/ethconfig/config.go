@@ -30,9 +30,9 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/bor"
 	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/consensus/xpos"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
 	"github.com/xpaymentsorg/go-xpayments/eth/gasprice"
@@ -207,18 +207,24 @@ type Config struct {
 	// CheckpointOracle is the configuration for checkpoint oracle.
 	CheckpointOracle *params.CheckpointOracleConfig `toml:",omitempty"`
 
-	// URL to connect to Heimdall node
-	HeimdallURL string
+	// // URL to connect to Heimdall node
+	// HeimdallURL string
 
-	// No heimdall service
-	WithoutHeimdall bool
+	// // No heimdall service
+	// WithoutHeimdall bool
+
+	// URL to connect to Genisys node
+	GenisysURL string
+
+	// No genisys service
+	WithoutGenisys bool
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideBerlin *big.Int `toml:",omitempty"`
 	OverrideLondon *big.Int `toml:",omitempty"`
 
-	// Bor logs flag
-	BorLogs bool
+	// XPS logs flag
+	XPSLogs bool
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
@@ -231,33 +237,40 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, et
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	}
-	// If Matic bor consensus is requested, set it up
-	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the bor config
-	// Then, bor != nil will also be enabled for ethash and clique. Only enable Bor for real if there is a validator contract present.
-	if chainConfig.Bor != nil && chainConfig.Bor.ValidatorContract != "" {
-		return bor.New(chainConfig, db, blockchainAPI, ethConfig.HeimdallURL, ethConfig.WithoutHeimdall)
+
+	// If xPayments xpos consensus is requested, set it up
+	// In order to pass the ethereum transaction tests, we need to set the burn contract which is in the xpos config
+	// Then, xpos != nil will also be enabled for ethash and clique. Only enable XPoS for real if there is a validator contract present.
+	if chainConfig.XPoS != nil && chainConfig.XPoS.ValidatorContract != "" {
+		return xpos.New(chainConfig, db, blockchainAPI, ethConfig.GenisysURL, ethConfig.WithoutGenisys)
 	}
-	// Otherwise assume proof-of-work
-	switch config.PowMode {
-	case ethash.ModeFake:
-		log.Warn("Ethash used in fake mode")
-	case ethash.ModeTest:
-		log.Warn("Ethash used in test mode")
-	case ethash.ModeShared:
-		log.Warn("Ethash used in shared mode")
+
+	// proof-of-work
+	if chainConfig.Ethash != nil {
+		switch config.PowMode {
+		case ethash.ModeFake:
+			log.Warn("Ethash used in fake mode")
+		case ethash.ModeTest:
+			log.Warn("Ethash used in test mode")
+		case ethash.ModeShared:
+			log.Warn("Ethash used in shared mode")
+		}
+		engine := ethash.New(ethash.Config{
+			PowMode:          config.PowMode,
+			CacheDir:         stack.ResolvePath(config.CacheDir),
+			CachesInMem:      config.CachesInMem,
+			CachesOnDisk:     config.CachesOnDisk,
+			CachesLockMmap:   config.CachesLockMmap,
+			DatasetDir:       config.DatasetDir,
+			DatasetsInMem:    config.DatasetsInMem,
+			DatasetsOnDisk:   config.DatasetsOnDisk,
+			DatasetsLockMmap: config.DatasetsLockMmap,
+			NotifyFull:       config.NotifyFull,
+		}, notify, noverify)
+		engine.SetThreads(-1) // Disable CPU mining
+		return engine
 	}
-	engine := ethash.New(ethash.Config{
-		PowMode:          config.PowMode,
-		CacheDir:         stack.ResolvePath(config.CacheDir),
-		CachesInMem:      config.CachesInMem,
-		CachesOnDisk:     config.CachesOnDisk,
-		CachesLockMmap:   config.CachesLockMmap,
-		DatasetDir:       config.DatasetDir,
-		DatasetsInMem:    config.DatasetsInMem,
-		DatasetsOnDisk:   config.DatasetsOnDisk,
-		DatasetsLockMmap: config.DatasetsLockMmap,
-		NotifyFull:       config.NotifyFull,
-	}, notify, noverify)
-	engine.SetThreads(-1) // Disable CPU mining
-	return engine
+
+	// Otherwise assume proof-of-stake (xPoS)
+	return xpos.New(chainConfig, db, blockchainAPI, ethConfig.GenisysURL, ethConfig.WithoutGenisys)
 }

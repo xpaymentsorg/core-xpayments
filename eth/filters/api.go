@@ -60,20 +60,20 @@ type PublicFilterAPI struct {
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
-	borLogs   bool
+	XPSLogs   bool
 
 	chainConfig *params.ChainConfig
 }
 
 // NewPublicFilterAPI returns a new PublicFilterAPI instance.
-func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration, borLogs bool) *PublicFilterAPI {
+func NewPublicFilterAPI(backend Backend, lightMode bool, timeout time.Duration, XPSLogs bool) *PublicFilterAPI {
 	api := &PublicFilterAPI{
 		backend: backend,
 		chainDb: backend.ChainDb(),
 		events:  NewEventSystem(backend, lightMode),
 		filters: make(map[rpc.ID]*filter),
 		timeout: timeout,
-		borLogs: borLogs,
+		XPSLogs: XPSLogs,
 	}
 	go api.timeoutLoop(timeout)
 
@@ -343,17 +343,17 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		return nil, errors.New("No chain config found. Proper PublicFilterAPI initialization required")
 	}
 
-	// get sprint from bor config
-	sprint := api.chainConfig.Bor.Sprint
+	// get sprint from XPoS config
+	sprint := api.chainConfig.XPoS.Sprint
 
 	var filter *Filter
-	var borLogsFilter *BorBlockLogsFilter
+	var XPSLogsFilter *XPoSBlockLogsFilter
 	if crit.BlockHash != nil {
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
-		// Block bor filter
-		if api.borLogs {
-			borLogsFilter = NewBorBlockLogsFilter(api.backend, sprint, *crit.BlockHash, crit.Addresses, crit.Topics)
+		// Block xps filter
+		if api.XPSLogs {
+			XPSLogsFilter = NewXPoSBlockLogsFilter(api.backend, sprint, *crit.BlockHash, crit.Addresses, crit.Topics)
 		}
 	} else {
 		// Convert the RPC block numbers into internal representations
@@ -367,9 +367,9 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
-		// Block bor filter
-		if api.borLogs {
-			borLogsFilter = NewBorBlockLogsRangeFilter(api.backend, sprint, begin, end, crit.Addresses, crit.Topics)
+		// Block XPS filter
+		if api.XPSLogs {
+			XPSLogsFilter = NewXPoSBlockLogsRangeFilter(api.backend, sprint, begin, end, crit.Addresses, crit.Topics)
 		}
 	}
 
@@ -379,17 +379,17 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		return nil, err
 	}
 
-	if borLogsFilter != nil {
+	if XPSLogsFilter != nil {
 		// Run the filter and return all the logs
-		borBlockLogs, err := borLogsFilter.Logs(ctx)
+		XPSBlockLogs, err := XPSLogsFilter.Logs(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		return returnLogs(types.MergeBorLogs(logs, borBlockLogs)), err
+		return returnLogs(types.MergeXPoSLogs(logs, XPSBlockLogs)), err
 	}
 
-	// merge bor block logs and receipt logs and return it
+	// merge XPS block logs and receipt logs and return it
 	return returnLogs(logs), err
 }
 

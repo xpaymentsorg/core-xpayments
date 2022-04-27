@@ -341,7 +341,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 	amount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), effectiveTip)
 	if london {
-		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().Bor.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
+		burntContractAddress := common.HexToAddress(st.evm.ChainConfig().XPoS.CalculateBurntContract(st.evm.Context.BlockNumber.Uint64()))
 		burnAmount := new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.evm.Context.BaseFee)
 		st.state.AddBalance(burntContractAddress, burnAmount)
 	}

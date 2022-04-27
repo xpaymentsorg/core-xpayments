@@ -26,7 +26,6 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"time"
 	"unicode"
 
 	"gopkg.in/urfave/cli.v1"
@@ -38,7 +37,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts/usbwallet"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/eth/catalyst"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
 	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -138,13 +136,13 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 		}
 	}
 
-	if ctx.GlobalIsSet(utils.MumbaiFlag.Name) {
-		setDefaultMumbaiGethConfig(ctx, &cfg)
-	}
+	// if ctx.GlobalIsSet(utils.MumbaiFlag.Name) {
+	// 	setDefaultMumbaiGethConfig(ctx, &cfg)
+	// }
 
-	if ctx.GlobalIsSet(utils.BorMainnetFlag.Name) {
-		setDefaultBorMainnetGethConfig(ctx, &cfg)
-	}
+	// if ctx.GlobalIsSet(utils.BorMainnetFlag.Name) {
+	// 	setDefaultBorMainnetGethConfig(ctx, &cfg)
+	// }
 
 	// Apply flags.
 	utils.SetNodeConfig(ctx, &cfg.Node)
@@ -163,8 +161,8 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, gethConfig) {
 	}
 	applyMetricConfig(ctx, &cfg)
 
-	// Set Bor config flags
-	utils.SetBorConfig(ctx, &cfg.Eth)
+	// // Set Bor config flags
+	// utils.SetBorConfig(ctx, &cfg.Eth)
 
 	return stack, cfg
 }
@@ -342,48 +340,48 @@ func setAccountManagerBackends(stack *node.Node) error {
 	return nil
 }
 
-func setDefaultMumbaiGethConfig(ctx *cli.Context, config *gethConfig) {
-	config.Node.P2P.ListenAddr = fmt.Sprintf(":%d", 30303)
-	config.Node.HTTPHost = "0.0.0.0"
-	config.Node.HTTPVirtualHosts = []string{"*"}
-	config.Node.HTTPCors = []string{"*"}
-	config.Node.HTTPPort = 8545
-	config.Node.IPCPath = utils.MakeDataDir(ctx) + "/bor.ipc"
-	config.Node.HTTPModules = []string{"eth", "net", "web3", "txpool", "bor"}
-	config.Eth.SyncMode = downloader.FullSync
-	config.Eth.NetworkId = 80001
-	config.Eth.Miner.GasCeil = 20000000
-	//--miner.gastarget is depreceated, No longed used
-	config.Eth.TxPool.NoLocals = true
-	config.Eth.TxPool.AccountSlots = 16
-	config.Eth.TxPool.GlobalSlots = 131072
-	config.Eth.TxPool.AccountQueue = 64
-	config.Eth.TxPool.GlobalQueue = 131072
-	config.Eth.TxPool.Lifetime = 90 * time.Minute
-	config.Node.P2P.MaxPeers = 200
-	config.Metrics.Enabled = true
-	// --pprof is enabled in 'internal/debug/flags.go'
-}
+// func setDefaultMumbaiGethConfig(ctx *cli.Context, config *gethConfig) {
+// 	config.Node.P2P.ListenAddr = fmt.Sprintf(":%d", 30303)
+// 	config.Node.HTTPHost = "0.0.0.0"
+// 	config.Node.HTTPVirtualHosts = []string{"*"}
+// 	config.Node.HTTPCors = []string{"*"}
+// 	config.Node.HTTPPort = 8545
+// 	config.Node.IPCPath = utils.MakeDataDir(ctx) + "/bor.ipc"
+// 	config.Node.HTTPModules = []string{"eth", "net", "web3", "txpool", "bor"}
+// 	config.Eth.SyncMode = downloader.FullSync
+// 	config.Eth.NetworkId = 80001
+// 	config.Eth.Miner.GasCeil = 20000000
+// 	//--miner.gastarget is depreceated, No longed used
+// 	config.Eth.TxPool.NoLocals = true
+// 	config.Eth.TxPool.AccountSlots = 16
+// 	config.Eth.TxPool.GlobalSlots = 131072
+// 	config.Eth.TxPool.AccountQueue = 64
+// 	config.Eth.TxPool.GlobalQueue = 131072
+// 	config.Eth.TxPool.Lifetime = 90 * time.Minute
+// 	config.Node.P2P.MaxPeers = 200
+// 	config.Metrics.Enabled = true
+// 	// --pprof is enabled in 'internal/debug/flags.go'
+// }
 
-func setDefaultBorMainnetGethConfig(ctx *cli.Context, config *gethConfig) {
-	config.Node.P2P.ListenAddr = fmt.Sprintf(":%d", 30303)
-	config.Node.HTTPHost = "0.0.0.0"
-	config.Node.HTTPVirtualHosts = []string{"*"}
-	config.Node.HTTPCors = []string{"*"}
-	config.Node.HTTPPort = 8545
-	config.Node.IPCPath = utils.MakeDataDir(ctx) + "/bor.ipc"
-	config.Node.HTTPModules = []string{"eth", "net", "web3", "txpool", "bor"}
-	config.Eth.SyncMode = downloader.FullSync
-	config.Eth.NetworkId = 137
-	config.Eth.Miner.GasCeil = 20000000
-	//--miner.gastarget is depreceated, No longed used
-	config.Eth.TxPool.NoLocals = true
-	config.Eth.TxPool.AccountSlots = 16
-	config.Eth.TxPool.GlobalSlots = 131072
-	config.Eth.TxPool.AccountQueue = 64
-	config.Eth.TxPool.GlobalQueue = 131072
-	config.Eth.TxPool.Lifetime = 90 * time.Minute
-	config.Node.P2P.MaxPeers = 200
-	config.Metrics.Enabled = true
-	// --pprof is enabled in 'internal/debug/flags.go'
-}
+// func setDefaultBorMainnetGethConfig(ctx *cli.Context, config *gethConfig) {
+// 	config.Node.P2P.ListenAddr = fmt.Sprintf(":%d", 30303)
+// 	config.Node.HTTPHost = "0.0.0.0"
+// 	config.Node.HTTPVirtualHosts = []string{"*"}
+// 	config.Node.HTTPCors = []string{"*"}
+// 	config.Node.HTTPPort = 8545
+// 	config.Node.IPCPath = utils.MakeDataDir(ctx) + "/bor.ipc"
+// 	config.Node.HTTPModules = []string{"eth", "net", "web3", "txpool", "bor"}
+// 	config.Eth.SyncMode = downloader.FullSync
+// 	config.Eth.NetworkId = 137
+// 	config.Eth.Miner.GasCeil = 20000000
+// 	//--miner.gastarget is depreceated, No longed used
+// 	config.Eth.TxPool.NoLocals = true
+// 	config.Eth.TxPool.AccountSlots = 16
+// 	config.Eth.TxPool.GlobalSlots = 131072
+// 	config.Eth.TxPool.AccountQueue = 64
+// 	config.Eth.TxPool.GlobalQueue = 131072
+// 	config.Eth.TxPool.Lifetime = 90 * time.Minute
+// 	config.Node.P2P.MaxPeers = 200
+// 	config.Metrics.Enabled = true
+// 	// --pprof is enabled in 'internal/debug/flags.go'
+// }

@@ -216,11 +216,11 @@ type BlockChain struct {
 
 	shouldPreserve func(*types.Block) bool // Function used to determine whether should preserve the given block.
 
-	// Bor related changes
-	borReceiptsCache *lru.Cache             // Cache for the most recent bor receipt receipts per block
-	stateSyncData    []*types.StateSyncData // State sync data
-	stateSyncFeed    event.Feed             // State sync feed
-	chain2HeadFeed   event.Feed             // Reorg/NewHead/Fork data feed
+	// XPoS related changes
+	xposReceiptsCache *lru.Cache             // Cache for the most recent xpos receipt receipts per block
+	stateSyncData     []*types.StateSyncData // State sync data
+	stateSyncFeed     event.Feed             // State sync feed
+	chain2HeadFeed    event.Feed             // Reorg/NewHead/Fork data feed
 }
 
 // NewBlockChain returns a fully initialised block chain using information
@@ -237,7 +237,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	txLookupCache, _ := lru.New(txLookupCacheLimit)
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 
-	borReceiptsCache, _ := lru.New(receiptsCacheLimit)
+	xposReceiptsCache, _ := lru.New(receiptsCacheLimit)
 
 	bc := &BlockChain{
 		chainConfig: chainConfig,
@@ -261,7 +261,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		engine:         engine,
 		vmConfig:       vmConfig,
 
-		borReceiptsCache: borReceiptsCache,
+		xposReceiptsCache: xposReceiptsCache,
 	}
 	bc.validator = NewBlockValidator(chainConfig, bc, engine)
 	bc.prefetcher = newStatePrefetcher(chainConfig, bc, engine)
@@ -624,8 +624,9 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 			// removed in the hc.SetHead function.
 			rawdb.DeleteBody(db, hash, num)
 			rawdb.DeleteReceipts(db, hash, num)
-			rawdb.DeleteBorReceipt(db, hash, num)
-			rawdb.DeleteBorTxLookupEntry(db, hash, num)
+
+			rawdb.DeleteXPoSReceipt(db, hash, num)
+			rawdb.DeleteXPoSTxLookupEntry(db, hash, num)
 		}
 		// Todo(rjl493456442) txlookup, bloombits, etc
 	}
@@ -648,7 +649,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	bc.blockCache.Purge()
 	bc.txLookupCache.Purge()
 	bc.futureBlocks.Purge()
-	bc.borReceiptsCache.Purge()
+	bc.xposReceiptsCache.Purge()
 
 	return rootNumber, bc.loadLastState()
 }
@@ -1225,15 +1226,15 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			return 0, fmt.Errorf("containing header #%d [%x..] unknown", last.Number(), last.Hash().Bytes()[:4])
 		}
 
-		// BOR: Retrieve all the bor receipts.
-		borReceipts := []types.Receipts{}
+		// XPoS: Retrieve all the xpos receipts.
+		xposReceipts := []types.Receipts{}
 		for _, block := range blockChain {
-			borReceipts = append(borReceipts, []*types.Receipt{bc.GetBorReceiptByHash(block.Hash())})
+			xposReceipts = append(xposReceipts, []*types.Receipt{bc.GetXPoSReceiptByHash(block.Hash())})
 		}
 
 		// Write all chain data to ancients.
 		td := bc.GetTd(first.Hash(), first.NumberU64())
-		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, borReceipts, td)
+		writeSize, err := rawdb.WriteAncientBlocks(bc.db, blockChain, receiptChain, xposReceipts, td)
 		size += writeSize
 		if err != nil {
 			log.Error("Error importing chain data to ancients", "err", err)
@@ -1510,17 +1511,17 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 			stateSyncLogs = blockLogs[len(logs):] // get state-sync logs from `state.Logs()`
 
 			// State sync logs don't have tx index, tx hash and other necessary fields
-			// DeriveFieldsForBorLogs will fill those fields for websocket subscriptions
-			types.DeriveFieldsForBorLogs(stateSyncLogs, block.Hash(), block.NumberU64(), uint(len(receipts)), uint(len(logs)))
+			// DeriveFieldsForXPoSLogs will fill those fields for websocket subscriptions
+			types.DeriveFieldsForXPoSLogs(stateSyncLogs, block.Hash(), block.NumberU64(), uint(len(receipts)), uint(len(logs)))
 
 			// Write bor receipt
-			rawdb.WriteBorReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
+			rawdb.WriteXPoSReceipt(blockBatch, block.Hash(), block.NumberU64(), &types.ReceiptForStorage{
 				Status: types.ReceiptStatusSuccessful, // make receipt status successful
 				Logs:   stateSyncLogs,
 			})
 
 			// Write bor tx reverse lookup
-			rawdb.WriteBorTxLookupEntry(blockBatch, block.Hash(), block.NumberU64())
+			rawdb.WriteXPoSTxLookupEntry(blockBatch, block.Hash(), block.NumberU64())
 		}
 	}
 
@@ -1640,11 +1641,11 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 		// event here.
 		if emitHeadEvent {
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
-			// BOR state sync feed related changes
+			// XPoS state sync feed related changes
 			for _, data := range bc.stateSyncData {
 				bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 			}
-			// BOR
+			// XPoS
 		}
 	} else {
 		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
@@ -1952,11 +1953,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 			atomic.StoreUint32(&followupInterrupt, 1)
 			return it.index, err
 		}
-		// BOR state sync feed related changes
+		// XPoS state sync feed related changes
 		for _, data := range bc.stateSyncData {
 			bc.stateSyncFeed.Send(StateSyncEvent{Data: data})
 		}
-		// BOR
+		// XPoS
 
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -2001,13 +2002,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		blockWriteTimer.Update(time.Since(substart) - statedb.AccountCommits - statedb.StorageCommits - statedb.SnapshotCommits)
 		blockInsertTimer.UpdateSince(start)
 
-		// BOR
+		// XPoS
 		if status == CanonStatTy {
 			canonAccum = append(canonAccum, block)
 		} else {
 			emitAccum()
 		}
-		// BOR
+		// XPoS
 
 		switch status {
 		case CanonStatTy:
@@ -2042,9 +2043,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		stats.report(chain, it.index, dirty)
 	}
 
-	// BOR
+	// XPoS
 	emitAccum()
-	// BOR
+	// XPoS
 
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && errors.Is(err, consensus.ErrFutureBlock) {
@@ -2213,10 +2214,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			}
 			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 
-			// Append bor receipt
-			borReceipt := rawdb.ReadBorReceipt(bc.db, hash, *number)
-			if borReceipt != nil {
-				receipts = append(receipts, borReceipt)
+			// Append xpos receipt
+			xposReceipt := rawdb.ReadXPoSReceipt(bc.db, hash, *number)
+			if xposReceipt != nil {
+				receipts = append(receipts, xposReceipt)
 			}
 
 			var logs []*types.Log
@@ -2301,7 +2302,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(oldChain) > 0 && len(newChain) > 0 {
 
 		bc.chain2HeadFeed.Send(Chain2HeadEvent{
-			Type:     Chain2HeadReorgEvent,
+			Type:     Chain2HeadReorgEventS,
 			NewChain: newChain,
 			OldChain: oldChain,
 		})
@@ -2636,7 +2637,7 @@ func (bc *BlockChain) SubscribeBlockProcessingEvent(ch chan<- bool) event.Subscr
 }
 
 //
-// Bor related changes
+// XPoS related changes
 //
 
 // SetStateSync set sync data in state_data

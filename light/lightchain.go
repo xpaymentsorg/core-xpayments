@@ -76,7 +76,7 @@ type LightChain struct {
 	procInterrupt    int32 // interrupts chain insert
 	disableCheckFreq int32 // disables header verification
 
-	// Bor
+	// XPS
 	chain2HeadFeed event.Feed
 }
 

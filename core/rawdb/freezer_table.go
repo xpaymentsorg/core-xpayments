@@ -745,7 +745,7 @@ func (t *freezerTable) dumpIndex(w io.Writer, start, stop int64) {
 }
 
 //
-// Bor related changes
+// XPoS related changes
 //
 
 // Fill adds empty data till given number (convenience method for backward compatibilty)

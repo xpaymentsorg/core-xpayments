@@ -24,7 +24,7 @@ package geth
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum"
+	ethereum "github.com/xpaymentsorg/go-xpayments"
 	"github.com/xpaymentsorg/go-xpayments/common"
 )
 
