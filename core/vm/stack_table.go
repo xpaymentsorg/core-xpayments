@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,26 +17,28 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
-func minSwapStack(n int) int {
-	return minStack(n, n)
-}
-func maxSwapStack(n int) int {
-	return maxStack(n, n)
+func makeStackFunc(pop, push int) stackValidationFunc {
+	return func(stack *Stack) error {
+		if err := stack.require(pop); err != nil {
+			return err
+		}
+
+		if stack.len()+push-pop > int(params.StackLimit) {
+			return fmt.Errorf("stack limit reached %d (%d)", stack.len(), params.StackLimit)
+		}
+		return nil
+	}
 }
 
-func minDupStack(n int) int {
-	return minStack(n, n+1)
-}
-func maxDupStack(n int) int {
-	return maxStack(n, n+1)
+func makeDupStackFunc(n int) stackValidationFunc {
+	return makeStackFunc(n, n+1)
 }
 
-func maxStack(pop, push int) int {
-	return int(params.StackLimit) + pop - push
-}
-func minStack(pops, push int) int {
-	return pops
+func makeSwapStackFunc(n int) stackValidationFunc {
+	return makeStackFunc(n, n)
 }

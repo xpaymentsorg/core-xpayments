@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,7 +36,7 @@ func TestFileDescriptorLimits(t *testing.T) {
 	if limit, err := Current(); err != nil || limit <= 0 {
 		t.Fatalf("failed to retrieve file descriptor limit (%d): %v", limit, err)
 	}
-	if _, err := Raise(uint64(target)); err != nil {
+	if err := Raise(uint64(target)); err != nil {
 		t.Fatalf("failed to raise file allowance")
 	}
 	if limit, err := Current(); err != nil || limit < target {

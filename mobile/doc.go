@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,7 +24,7 @@
 //
 // Since gomobile cannot bridge arbitrary types between Go and Android/iOS, the
 // exposed APIs need to be manually wrapped into simplified types, with custom
-// constructors and getters/setters to ensure that they can be meaningfully used
+// constructors and getters/setters to ensure that they can be meaninfully used
 // from Java/ObjC too.
 //
 // With this in mind, please try to limit the scope of this package and only add

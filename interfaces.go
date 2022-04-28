@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package xpayments defines interfaces for interacting with xPayments.
-package xpayments
+// Package ethereum defines interfaces for interacting with Ethereum.
+package ethereum
 
 import (
 	"context"
@@ -99,7 +96,7 @@ type ChainStateReader interface {
 }
 
 // SyncProgress gives progress indications when the node is synchronising with
-// the xPayments network.
+// the Ethereum network.
 type SyncProgress struct {
 	StartingBlock uint64 // Block number where sync began
 	CurrentBlock  uint64 // Current block number where sync is at
@@ -116,16 +113,12 @@ type ChainSyncReader interface {
 
 // CallMsg contains parameters for contract calls.
 type CallMsg struct {
-	From      common.Address  // the sender of the 'transaction'
-	To        *common.Address // the destination contract (nil for contract creation)
-	Gas       uint64          // if 0, the call executes with near-infinite gas
-	GasPrice  *big.Int        // wei <-> gas exchange ratio
-	GasFeeCap *big.Int        // EIP-1559 fee cap per gas.
-	GasTipCap *big.Int        // EIP-1559 tip per gas.
-	Value     *big.Int        // amount of wei sent along with the call
-	Data      []byte          // input data, usually an ABI-encoded contract method invocation
-
-	AccessList types.AccessList // EIP-2930 access list.
+	From     common.Address  // the sender of the 'transaction'
+	To       *common.Address // the destination contract (nil for contract creation)
+	Gas      uint64          // if 0, the call executes with near-infinite gas
+	GasPrice *big.Int        // wei <-> gas exchange ratio
+	Value    *big.Int        // amount of wei sent along with the call
+	Data     []byte          // input data, usually an ABI-encoded contract method invocation
 }
 
 // A ContractCaller provides contract calls, essentially transactions that are executed by
@@ -138,7 +131,6 @@ type ContractCaller interface {
 
 // FilterQuery contains options for contract log filtering.
 type FilterQuery struct {
-	BlockHash *common.Hash     // used by eth_getLogs, return logs only from block with this hash
 	FromBlock *big.Int         // beginning of the queried range, nil means genesis block
 	ToBlock   *big.Int         // end of the range, nil means latest block
 	Addresses []common.Address // restricts matches to events created by specific contracts
@@ -151,9 +143,9 @@ type FilterQuery struct {
 	// Examples:
 	// {} or nil          matches any topic list
 	// {{A}}              matches topic A in first position
-	// {{}, {B}}          matches any topic in first position AND B in second position
-	// {{A}, {B}}         matches topic A in first position AND B in second position
-	// {{A, B}, {C, D}}   matches topic (A OR B) in first position AND (C OR D) in second position
+	// {{}, {B}}          matches any topic in first position, B in second position
+	// {{A}}, {B}}        matches topic A in first position, B in second position
+	// {{A, B}}, {C, D}}  matches topic (A OR B) in first position, (C OR D) in second position
 	Topics [][]common.Hash
 }
 
@@ -215,10 +207,4 @@ type GasEstimator interface {
 // pending state.
 type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
-}
-
-// StateSyncFilter state sync filter
-type StateSyncFilter struct {
-	ID       uint64
-	Contract common.Address
 }

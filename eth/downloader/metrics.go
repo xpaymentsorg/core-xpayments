@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -43,6 +40,4 @@ var (
 
 	stateInMeter   = metrics.NewRegisteredMeter("eth/downloader/states/in", nil)
 	stateDropMeter = metrics.NewRegisteredMeter("eth/downloader/states/drop", nil)
-
-	throttleCounter = metrics.NewRegisteredCounter("eth/downloader/throttle", nil)
 )

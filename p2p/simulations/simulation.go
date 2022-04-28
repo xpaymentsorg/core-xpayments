@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 )
 
 // Simulation provides a framework for running actions in a simulated network
@@ -58,7 +55,7 @@ func (s *Simulation) Run(ctx context.Context, step *Step) (result *StepResult) {
 	}
 
 	// wait for all node expectations to either pass, error or timeout
-	nodes := make(map[enode.ID]struct{}, len(step.Expect.Nodes))
+	nodes := make(map[discover.NodeID]struct{}, len(step.Expect.Nodes))
 	for _, id := range step.Expect.Nodes {
 		nodes[id] = struct{}{}
 	}
@@ -122,7 +119,7 @@ type Step struct {
 
 	// Trigger is a channel which receives node ids and triggers an
 	// expectation check for that node
-	Trigger chan enode.ID
+	Trigger chan discover.NodeID
 
 	// Expect is the expectation to wait for when performing this step
 	Expect *Expectation
@@ -130,15 +127,15 @@ type Step struct {
 
 type Expectation struct {
 	// Nodes is a list of nodes to check
-	Nodes []enode.ID
+	Nodes []discover.NodeID
 
 	// Check checks whether a given node meets the expectation
-	Check func(context.Context, enode.ID) (bool, error)
+	Check func(context.Context, discover.NodeID) (bool, error)
 }
 
 func newStepResult() *StepResult {
 	return &StepResult{
-		Passes: make(map[enode.ID]time.Time),
+		Passes: make(map[discover.NodeID]time.Time),
 	}
 }
 
@@ -153,7 +150,7 @@ type StepResult struct {
 	FinishedAt time.Time
 
 	// Passes are the timestamps of the successful node expectations
-	Passes map[enode.ID]time.Time
+	Passes map[discover.NodeID]time.Time
 
 	// NetworkEvents are the network events which occurred during the step
 	NetworkEvents []*Event

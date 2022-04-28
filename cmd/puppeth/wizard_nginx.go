@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -44,12 +41,12 @@ func (w *wizard) ensureVirtualHost(client *sshClient, port int, def string) (str
 	// Reverse proxy is not running, offer to deploy a new one
 	fmt.Println()
 	fmt.Println("Allow sharing the port with other services (y/n)? (default = yes)")
-	if w.readDefaultYesNo(true) {
+	if w.readDefaultString("y") == "y" {
 		nocache := false
 		if proxy != nil {
 			fmt.Println()
 			fmt.Printf("Should the reverse-proxy be rebuilt from scratch (y/n)? (default = no)\n")
-			nocache = w.readDefaultYesNo(false)
+			nocache = w.readDefaultString("n") != "n"
 		}
 		if out, err := deployNginx(client, w.network, port, nocache); err != nil {
 			log.Error("Failed to deploy reverse-proxy", "err", err)

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -45,22 +42,9 @@ type RLPTest struct {
 	Out string
 }
 
-// FromHex returns the bytes represented by the hexadecimal string s.
-// s may be prefixed with "0x".
-// This is copy-pasted from bytes.go, which does not return the error
-func FromHex(s string) ([]byte, error) {
-	if len(s) > 1 && (s[0:2] == "0x" || s[0:2] == "0X") {
-		s = s[2:]
-	}
-	if len(s)%2 == 1 {
-		s = "0" + s
-	}
-	return hex.DecodeString(s)
-}
-
 // Run executes the test.
 func (t *RLPTest) Run() error {
-	outb, err := FromHex(t.Out)
+	outb, err := hex.DecodeString(t.Out)
 	if err != nil {
 		return fmt.Errorf("invalid hex in Out")
 	}

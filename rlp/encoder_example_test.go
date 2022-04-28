@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -31,7 +28,15 @@ type MyCoolType struct {
 
 // EncodeRLP writes x as RLP list [a, b] that omits the Name field.
 func (x *MyCoolType) EncodeRLP(w io.Writer) (err error) {
-	return Encode(w, []uint{x.a, x.b})
+	// Note: the receiver can be a nil pointer. This allows you to
+	// control the encoding of nil, but it also means that you have to
+	// check for a nil receiver.
+	if x == nil {
+		err = Encode(w, []uint{0, 0})
+	} else {
+		err = Encode(w, []uint{x.a, x.b})
+	}
+	return err
 }
 
 func ExampleEncoder() {
@@ -44,6 +49,6 @@ func ExampleEncoder() {
 	fmt.Printf("%v → %X\n", t, bytes)
 
 	// Output:
-	// <nil> → C0
+	// <nil> → C28080
 	// &{foobar 5 6} → C20506
 }

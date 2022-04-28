@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -28,8 +25,8 @@ func TestStorageSizeString(t *testing.T) {
 		size StorageSize
 		str  string
 	}{
-		{2381273, "2.27 MiB"},
-		{2192, "2.14 KiB"},
+		{2381273, "2.38 mB"},
+		{2192, "2.19 kB"},
 		{12, "12.00 B"},
 	}
 

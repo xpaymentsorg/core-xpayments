@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -212,16 +209,6 @@ func TestU256(t *testing.T) {
 		if y := U256(new(big.Int).Set(test.x)); y.Cmp(test.y) != 0 {
 			t.Errorf("U256(%x) = %x, want %x", test.x, y, test.y)
 		}
-	}
-}
-
-func TestU256Bytes(t *testing.T) {
-	ubytes := make([]byte, 32)
-	ubytes[31] = 1
-
-	unsigned := U256Bytes(big.NewInt(1))
-	if !bytes.Equal(unsigned, ubytes) {
-		t.Errorf("expected %x got %x", ubytes, unsigned)
 	}
 }
 

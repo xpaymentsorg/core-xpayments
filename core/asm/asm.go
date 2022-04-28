@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -112,9 +109,9 @@ func PrintDisassembled(code string) error {
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {
-			fmt.Printf("%05x: %v 0x%x\n", it.PC(), it.Op(), it.Arg())
+			fmt.Printf("%06v: %v 0x%x\n", it.PC(), it.Op(), it.Arg())
 		} else {
-			fmt.Printf("%05x: %v\n", it.PC(), it.Op())
+			fmt.Printf("%06v: %v\n", it.PC(), it.Op())
 		}
 	}
 	return it.Error()
@@ -127,9 +124,9 @@ func Disassemble(script []byte) ([]string, error) {
 	it := NewInstructionIterator(script)
 	for it.Next() {
 		if it.Arg() != nil && 0 < len(it.Arg()) {
-			instrs = append(instrs, fmt.Sprintf("%05x: %v 0x%x\n", it.PC(), it.Op(), it.Arg()))
+			instrs = append(instrs, fmt.Sprintf("%06v: %v 0x%x\n", it.PC(), it.Op(), it.Arg()))
 		} else {
-			instrs = append(instrs, fmt.Sprintf("%05x: %v\n", it.PC(), it.Op()))
+			instrs = append(instrs, fmt.Sprintf("%06v: %v\n", it.PC(), it.Op()))
 		}
 	}
 	if err := it.Error(); err != nil {

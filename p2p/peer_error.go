@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -51,11 +48,13 @@ func newPeerError(code int, format string, v ...interface{}) *peerError {
 	return err
 }
 
-func (pe *peerError) Error() string {
-	return pe.message
+func (self *peerError) Error() string {
+	return self.message
 }
 
 var errProtocolReturned = errors.New("protocol returned")
+
+var ErrAddPairPeer = errors.New("add a pair peer")
 
 type DiscReason uint
 
@@ -72,6 +71,7 @@ const (
 	DiscUnexpectedIdentity
 	DiscSelf
 	DiscReadTimeout
+	DiscPairPeerStop
 	DiscSubprotocolError = 0x10
 )
 
@@ -88,11 +88,12 @@ var discReasonToString = [...]string{
 	DiscUnexpectedIdentity:  "unexpected identity",
 	DiscSelf:                "connected to self",
 	DiscReadTimeout:         "read timeout",
+	DiscPairPeerStop:        "pair peer connection stop",
 	DiscSubprotocolError:    "subprotocol error",
 }
 
 func (d DiscReason) String() string {
-	if len(discReasonToString) <= int(d) {
+	if len(discReasonToString) < int(d) {
 		return fmt.Sprintf("unknown disconnect reason %d", d)
 	}
 	return discReasonToString[d]

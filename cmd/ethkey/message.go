@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -65,7 +62,7 @@ To sign a message contained in a file, use the --msgfile flag.
 		}
 
 		// Decrypt key with passphrase.
-		passphrase := getPassphrase(ctx, false)
+		passphrase := getPassPhrase(ctx, false)
 		key, err := keystore.DecryptKey(keyjson, passphrase)
 		if err != nil {
 			utils.Fatalf("Error decrypting key: %v", err)

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -23,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/xpaymentsorg/go-xpayments/internal/flags"
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -33,31 +30,32 @@ const (
 
 // Git SHA1 commit hash of the release (set via linker flags)
 var gitCommit = ""
-var gitDate = ""
 
 var app *cli.App
 
 func init() {
-	app = flags.NewApp(gitCommit, gitDate, "an Ethereum key manager")
+	app = utils.NewApp(gitCommit, "an Ethereum key manager")
 	app.Commands = []cli.Command{
 		commandGenerate,
 		commandInspect,
-		commandChangePassphrase,
 		commandSignMessage,
 		commandVerifyMessage,
 	}
-	cli.CommandHelpTemplate = flags.OriginCommandHelpTemplate
 }
 
 // Commonly used command line flags.
 var (
 	passphraseFlag = cli.StringFlag{
 		Name:  "passwordfile",
-		Usage: "the file that contains the password for the keyfile",
+		Usage: "the file that contains the passphrase for the keyfile",
 	}
 	jsonFlag = cli.BoolFlag{
 		Name:  "json",
 		Usage: "output JSON instead of human-readable format",
+	}
+	messageFlag = cli.StringFlag{
+		Name:  "message",
+		Usage: "the file that contains the message to sign/verify",
 	}
 )
 

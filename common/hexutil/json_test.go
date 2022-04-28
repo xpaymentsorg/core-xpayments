@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -91,7 +88,7 @@ func TestUnmarshalBytes(t *testing.T) {
 		if !checkError(t, test.input, err, test.wantErr) {
 			continue
 		}
-		if !bytes.Equal(test.want.([]byte), v) {
+		if !bytes.Equal(test.want.([]byte), []byte(v)) {
 			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, &v, test.want)
 			continue
 		}

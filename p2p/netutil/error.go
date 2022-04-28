@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,12 +22,4 @@ func IsTemporaryError(err error) bool {
 		Temporary() bool
 	})
 	return ok && tempErr.Temporary() || isPacketTooBig(err)
-}
-
-// IsTimeout checks whether the given error is a timeout.
-func IsTimeout(err error) bool {
-	timeoutErr, ok := err.(interface {
-		Timeout() bool
-	})
-	return ok && timeoutErr.Timeout()
 }

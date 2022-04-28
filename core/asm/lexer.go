@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -98,7 +95,7 @@ type lexer struct {
 
 // lex lexes the program by name with the given source. It returns a
 // channel on which the tokens are delivered.
-func Lex(source []byte, debug bool) <-chan token {
+func Lex(name string, source []byte, debug bool) <-chan token {
 	ch := make(chan token)
 	l := &lexer{
 		input:  string(source),
@@ -237,7 +234,7 @@ func lexComment(l *lexer) stateFn {
 // the lex text state function to advance the parsing
 // process.
 func lexLabel(l *lexer) stateFn {
-	l.acceptRun(Alpha + "_" + Numbers)
+	l.acceptRun(Alpha + "_")
 
 	l.emit(label)
 
@@ -245,7 +242,7 @@ func lexLabel(l *lexer) stateFn {
 }
 
 // lexInsideString lexes the inside of a string until
-// the state function finds the closing quote.
+// until the state function finds the closing quote.
 // It returns the lex text state function.
 func lexInsideString(l *lexer) stateFn {
 	if l.acceptRunUntil('"') {
@@ -257,7 +254,7 @@ func lexInsideString(l *lexer) stateFn {
 
 func lexNumber(l *lexer) stateFn {
 	acceptance := Numbers
-	if l.accept("xX") {
+	if l.accept("0") || l.accept("xX") {
 		acceptance = HexadecimalNumbers
 	}
 	l.acceptRun(acceptance)

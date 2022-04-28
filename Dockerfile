@@ -1,17 +1,23 @@
-FROM golang:latest
+FROM golang:1.10-alpine as builder
 
-ARG GPAY_DIR=/gpay
-ENV GPAY_DIR=$GPAY_DIR
+RUN apk add --no-cache make gcc musl-dev linux-headers
 
-RUN apt-get update -y && apt-get upgrade -y \
-    && apt install build-essential git -y \
-    && mkdir -p /gpay
+ADD . /XDCchain
+RUN cd /XDCchain && make XDC
 
-WORKDIR ${GPAY_DIR}
-COPY . .
-RUN make gpay-all
+FROM alpine:latest
 
-ENV SHELL /bin/bash
-EXPOSE 8545 8546 8547 30303 30303/udp
+LABEL maintainer="anil@xinfin.org"
 
-ENTRYPOINT ["gpay"]
+WORKDIR /XDCchain
+
+COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
+
+RUN chmod +x /usr/local/bin/XDC
+
+EXPOSE 8545
+EXPOSE 30303
+
+ENTRYPOINT ["/usr/local/bin/XDC"]
+
+CMD ["--help"]

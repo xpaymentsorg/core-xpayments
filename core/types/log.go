@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,6 +17,7 @@
 package types
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
@@ -47,11 +45,11 @@ type Log struct {
 	// hash of the transaction
 	TxHash common.Hash `json:"transactionHash" gencodec:"required"`
 	// index of the transaction in the block
-	TxIndex uint `json:"transactionIndex"`
+	TxIndex uint `json:"transactionIndex" gencodec:"required"`
 	// hash of the block in which the transaction was included
 	BlockHash common.Hash `json:"blockHash"`
-	// index of the log in the block
-	Index uint `json:"logIndex"`
+	// index of the log in the receipt
+	Index uint `json:"logIndex" gencodec:"required"`
 
 	// The Removed field is true if this log was reverted due to a chain reorganisation.
 	// You must pay attention to this field if you receive logs through a filter query.
@@ -71,11 +69,7 @@ type rlpLog struct {
 	Data    []byte
 }
 
-// rlpStorageLog is the storage encoding of a log.
-type rlpStorageLog rlpLog
-
-// legacyRlpStorageLog is the previous storage encoding of a log including some redundant fields.
-type legacyRlpStorageLog struct {
+type rlpStorageLog struct {
 	Address     common.Address
 	Topics      []common.Hash
 	Data        []byte
@@ -101,6 +95,10 @@ func (l *Log) DecodeRLP(s *rlp.Stream) error {
 	return err
 }
 
+func (l *Log) String() string {
+	return fmt.Sprintf(`log: %x %x %x %x %d %x %d`, l.Address, l.Topics, l.Data, l.TxHash, l.TxIndex, l.BlockHash, l.Index)
+}
+
 // LogForStorage is a wrapper around a Log that flattens and parses the entire content of
 // a log including non-consensus fields.
 type LogForStorage Log
@@ -108,38 +106,31 @@ type LogForStorage Log
 // EncodeRLP implements rlp.Encoder.
 func (l *LogForStorage) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, rlpStorageLog{
-		Address: l.Address,
-		Topics:  l.Topics,
-		Data:    l.Data,
+		Address:     l.Address,
+		Topics:      l.Topics,
+		Data:        l.Data,
+		BlockNumber: l.BlockNumber,
+		TxHash:      l.TxHash,
+		TxIndex:     l.TxIndex,
+		BlockHash:   l.BlockHash,
+		Index:       l.Index,
 	})
 }
 
 // DecodeRLP implements rlp.Decoder.
-//
-// Note some redundant fields(e.g. block number, tx hash etc) will be assembled later.
 func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
-	blob, err := s.Raw()
-	if err != nil {
-		return err
-	}
 	var dec rlpStorageLog
-	err = rlp.DecodeBytes(blob, &dec)
+	err := s.Decode(&dec)
 	if err == nil {
 		*l = LogForStorage{
-			Address: dec.Address,
-			Topics:  dec.Topics,
-			Data:    dec.Data,
-		}
-	} else {
-		// Try to decode log with previous definition.
-		var dec legacyRlpStorageLog
-		err = rlp.DecodeBytes(blob, &dec)
-		if err == nil {
-			*l = LogForStorage{
-				Address: dec.Address,
-				Topics:  dec.Topics,
-				Data:    dec.Data,
-			}
+			Address:     dec.Address,
+			Topics:      dec.Topics,
+			Data:        dec.Data,
+			BlockNumber: dec.BlockNumber,
+			TxHash:      dec.TxHash,
+			TxIndex:     dec.TxIndex,
+			BlockHash:   dec.BlockHash,
+			Index:       dec.Index,
 		}
 	}
 	return err

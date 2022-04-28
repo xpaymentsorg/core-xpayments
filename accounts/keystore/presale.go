@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -28,7 +25,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/google/uuid"
+	"github.com/pborman/uuid"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"golang.org/x/crypto/pbkdf2"
@@ -40,17 +37,8 @@ func importPreSaleKey(keyStore keyStore, keyJSON []byte, password string) (accou
 	if err != nil {
 		return accounts.Account{}, nil, err
 	}
-	key.Id, err = uuid.NewRandom()
-	if err != nil {
-		return accounts.Account{}, nil, err
-	}
-	a := accounts.Account{
-		Address: key.Address,
-		URL: accounts.URL{
-			Scheme: KeyStoreScheme,
-			Path:   keyStore.JoinPath(keyFileName(key.Address)),
-		},
-	}
+	key.Id = uuid.NewRandom()
+	a := accounts.Account{Address: key.Address, URL: accounts.URL{Scheme: KeyStoreScheme, Path: keyStore.JoinPath(keyFileName(key.Address))}}
 	err = keyStore.StoreKey(a.URL.Path, key, password)
 	return a, key, err
 }
@@ -92,7 +80,7 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	ecKey := crypto.ToECDSAUnsafe(ethPriv)
 
 	key = &Key{
-		Id:         uuid.UUID{},
+		Id:         nil,
 		Address:    crypto.PubkeyToAddress(ecKey.PublicKey),
 		PrivateKey: ecKey,
 	}

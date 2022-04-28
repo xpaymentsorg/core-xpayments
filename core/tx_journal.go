@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -37,7 +34,7 @@ var errNoActiveJournal = errors.New("no active journal")
 // devNull is a WriteCloser that just discards anything written into it. Its
 // goal is to allow the transaction journal to write into a fake journal when
 // loading transactions on startup without printing warnings due to no file
-// being read for write.
+// being readt for write.
 type devNull struct{}
 
 func (*devNull) Write(p []byte) (n int, err error) { return len(p), nil }
@@ -59,8 +56,8 @@ func newTxJournal(path string) *txJournal {
 
 // load parses a transaction journal dump from disk, loading its contents into
 // the specified pool.
-func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
-	// Skip the parsing if the journal file doesn't exist at all
+func (journal *txJournal) load(add func(*types.Transaction) error) error {
+	// Skip the parsing if the journal file doens't exist at all
 	if _, err := os.Stat(journal.path); os.IsNotExist(err) {
 		return nil
 	}
@@ -79,21 +76,7 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 	stream := rlp.NewStream(input, 0)
 	total, dropped := 0, 0
 
-	// Create a method to load a limited batch of transactions and bump the
-	// appropriate progress counters. Then use this method to load all the
-	// journaled transactions in small-ish batches.
-	loadBatch := func(txs types.Transactions) {
-		for _, err := range add(txs) {
-			if err != nil {
-				log.Debug("Failed to add journaled transaction", "err", err)
-				dropped++
-			}
-		}
-	}
-	var (
-		failure error
-		batch   types.Transactions
-	)
+	var failure error
 	for {
 		// Parse the next transaction and terminate on error
 		tx := new(types.Transaction)
@@ -101,17 +84,14 @@ func (journal *txJournal) load(add func([]*types.Transaction) []error) error {
 			if err != io.EOF {
 				failure = err
 			}
-			if batch.Len() > 0 {
-				loadBatch(batch)
-			}
 			break
 		}
-		// New transaction parsed, queue up for later, import if threshold is reached
+		// Import the transaction and bump the appropriate progress counters
 		total++
-
-		if batch = append(batch, tx); batch.Len() > 1024 {
-			loadBatch(batch)
-			batch = batch[:0]
+		if err = add(tx); err != nil {
+			log.Debug("Failed to add journaled transaction", "err", err)
+			dropped++
+			continue
 		}
 	}
 	log.Info("Loaded local transaction journal", "transactions", total, "dropped", dropped)
@@ -141,7 +121,7 @@ func (journal *txJournal) rotate(all map[common.Address]types.Transactions) erro
 		journal.writer = nil
 	}
 	// Generate a new journal with the contents of the current pool
-	replacement, err := os.OpenFile(journal.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	replacement, err := os.OpenFile(journal.path+".new", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return err
 	}
@@ -161,7 +141,7 @@ func (journal *txJournal) rotate(all map[common.Address]types.Transactions) erro
 	if err = os.Rename(journal.path+".new", journal.path); err != nil {
 		return err
 	}
-	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_APPEND, 0644)
+	sink, err := os.OpenFile(journal.path, os.O_WRONLY|os.O_APPEND, 0755)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -28,7 +25,7 @@ import (
 
 func Compile(fn string, src []byte, debug bool) (string, error) {
 	compiler := asm.NewCompiler(debug)
-	compiler.Feed(asm.Lex(src, debug))
+	compiler.Feed(asm.Lex(fn, src, debug))
 
 	bin, compileErrors := compiler.Compile()
 	if len(compileErrors) > 0 {

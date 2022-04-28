@@ -65,7 +65,7 @@ type Batch struct {
 	Source      string        `json:"source"`
 }
 
-func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
+func (self *LibratoClient) PostMetrics(batch Batch) (err error) {
 	var (
 		js   []byte
 		req  *http.Request
@@ -85,7 +85,7 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(c.Email, c.Token)
+	req.SetBasicAuth(self.Email, self.Token)
 
 	if resp, err = http.DefaultClient.Do(req); err != nil {
 		return
@@ -96,7 +96,7 @@ func (c *LibratoClient) PostMetrics(batch Batch) (err error) {
 		if body, err = ioutil.ReadAll(resp.Body); err != nil {
 			body = []byte(fmt.Sprintf("(could not fetch response body for error: %s)", err))
 		}
-		err = fmt.Errorf("unable to post to Librato: %d %s %s", resp.StatusCode, resp.Status, string(body))
+		err = fmt.Errorf("Unable to post to Librato: %d %s %s", resp.StatusCode, resp.Status, string(body))
 	}
 	return
 }

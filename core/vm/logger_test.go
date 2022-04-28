@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -23,9 +20,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/holiman/uint256"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
@@ -33,6 +28,7 @@ type dummyContractRef struct {
 	calledForEach bool
 }
 
+func (dummyContractRef) ReturnGas(*big.Int)          {}
 func (dummyContractRef) Address() common.Address     { return common.Address{} }
 func (dummyContractRef) Value() *big.Int             { return new(big.Int) }
 func (dummyContractRef) SetCode(common.Hash, []byte) {}
@@ -45,33 +41,30 @@ func (d *dummyContractRef) SetBalance(*big.Int)        {}
 func (d *dummyContractRef) SetNonce(uint64)            {}
 func (d *dummyContractRef) Balance() *big.Int          { return new(big.Int) }
 
-type dummyStatedb struct {
-	state.StateDB
+type dummyStateDB struct {
+	NoopStateDB
+	ref *dummyContractRef
 }
-
-func (*dummyStatedb) GetRefund() uint64 { return 1337 }
 
 func TestStoreCapture(t *testing.T) {
 	var (
-		env      = NewEVM(BlockContext{}, TxContext{}, &dummyStatedb{}, params.TestChainConfig, Config{})
+		env      = NewEVM(Context{}, nil, params.TestChainConfig, Config{})
 		logger   = NewStructLogger(nil)
+		mem      = NewMemory()
+		stack    = newstack()
 		contract = NewContract(&dummyContractRef{}, &dummyContractRef{}, new(big.Int), 0)
-		scope    = &ScopeContext{
-			Memory:   NewMemory(),
-			Stack:    newstack(),
-			Contract: contract,
-		}
 	)
-	scope.Stack.push(uint256.NewInt(1))
-	scope.Stack.push(new(uint256.Int))
+	stack.push(big.NewInt(1))
+	stack.push(big.NewInt(0))
+
 	var index common.Hash
-	logger.CaptureState(env, 0, SSTORE, 0, 0, scope, nil, 0, nil)
-	if len(logger.storage[contract.Address()]) == 0 {
-		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(),
-			len(logger.storage[contract.Address()]))
+
+	logger.CaptureState(env, 0, SSTORE, 0, 0, mem, stack, contract, 0, nil)
+	if len(logger.changedValues[contract.Address()]) == 0 {
+		t.Fatalf("expected exactly 1 changed value on address %x, got %d", contract.Address(), len(logger.changedValues[contract.Address()]))
 	}
 	exp := common.BigToHash(big.NewInt(1))
-	if logger.storage[contract.Address()][index] != exp {
-		t.Errorf("expected %x, got %x", exp, logger.storage[contract.Address()][index])
+	if logger.changedValues[contract.Address()][index] != exp {
+		t.Errorf("expected %x, got %x", exp, logger.changedValues[contract.Address()][index])
 	}
 }

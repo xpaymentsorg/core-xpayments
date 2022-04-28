@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -24,13 +21,13 @@ import (
 	"net"
 )
 
-// DialInProc attaches an in-process connection to the given RPC server.
+// NewInProcClient attaches an in-process connection to the given RPC server.
 func DialInProc(handler *Server) *Client {
 	initctx := context.Background()
-	c, _ := newClient(initctx, func(context.Context) (ServerCodec, error) {
+	c, _ := newClient(initctx, func(context.Context) (net.Conn, error) {
 		p1, p2 := net.Pipe()
-		go handler.ServeCodec(NewCodec(p1), 0)
-		return NewCodec(p2), nil
+		go handler.ServeCodec(NewJSONCodec(p1), OptionMethodInvocation|OptionSubscriptions)
+		return p2, nil
 	})
 	return c
 }

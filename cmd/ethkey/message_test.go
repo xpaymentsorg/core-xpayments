@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -37,11 +34,11 @@ func TestMessageSignVerify(t *testing.T) {
 	message := "test message"
 
 	// Create the key.
-	generate := runEthkey(t, "generate", "--lightkdf", keyfile)
+	generate := runEthkey(t, "generate", keyfile)
 	generate.Expect(`
 !! Unsupported terminal, password will be echoed.
-Password: {{.InputLine "foobar"}}
-Repeat password: {{.InputLine "foobar"}}
+Passphrase: {{.InputLine "foobar"}}
+Repeat passphrase: {{.InputLine "foobar"}}
 `)
 	_, matches := generate.ExpectRegexp(`Address: (0x[0-9a-fA-F]{40})\n`)
 	address := matches[1]
@@ -51,7 +48,7 @@ Repeat password: {{.InputLine "foobar"}}
 	sign := runEthkey(t, "signmessage", keyfile, message)
 	sign.Expect(`
 !! Unsupported terminal, password will be echoed.
-Password: {{.InputLine "foobar"}}
+Passphrase: {{.InputLine "foobar"}}
 `)
 	_, matches = sign.ExpectRegexp(`Signature: ([0-9a-f]+)\n`)
 	signature := matches[1]

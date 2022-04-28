@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -40,6 +37,17 @@ func convertFileLockError(err error) error {
 		return ErrDatadirUsed
 	}
 	return err
+}
+
+// DuplicateServiceError is returned during Node startup if a registered service
+// constructor returns a service of the same type that was already started.
+type DuplicateServiceError struct {
+	Kind reflect.Type
+}
+
+// Error generates a textual representation of the duplicate service error.
+func (e *DuplicateServiceError) Error() string {
+	return fmt.Sprintf("duplicate service: %v", e.Kind)
 }
 
 // StopError is returned if a Node fails to stop either any of its registered

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !nacl && !js && cgo && !gofuzz
-// +build !nacl,!js,cgo,!gofuzz
+//go:build !nacl && !js && !nocgo
+// +build !nacl,!js,!nocgo
 
 package crypto
 
@@ -51,24 +48,24 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 //
 // This function is susceptible to chosen plaintext attacks that can leak
 // information about the private key that is used for signing. Callers must
-// be aware that the given digest cannot be chosen by an adversery. Common
+// be aware that the given hash cannot be chosen by an adversery. Common
 // solution is to hash any input before calculating the signature.
 //
 // The produced signature is in the [R || S || V] format where V is 0 or 1.
-func Sign(digestHash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
-	if len(digestHash) != DigestLength {
-		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(digestHash))
+func Sign(hash []byte, prv *ecdsa.PrivateKey) (sig []byte, err error) {
+	if len(hash) != 32 {
+		return nil, fmt.Errorf("hash is required to be exactly 32 bytes (%d)", len(hash))
 	}
 	seckey := math.PaddedBigBytes(prv.D, prv.Params().BitSize/8)
 	defer zeroBytes(seckey)
-	return secp256k1.Sign(digestHash, seckey)
+	return secp256k1.Sign(hash, seckey)
 }
 
-// VerifySignature checks that the given public key created signature over digest.
+// VerifySignature checks that the given public key created signature over hash.
 // The public key should be in compressed (33 bytes) or uncompressed (65 bytes) format.
 // The signature should have the 64 byte [R || S] format.
-func VerifySignature(pubkey, digestHash, signature []byte) bool {
-	return secp256k1.VerifySignature(pubkey, digestHash, signature)
+func VerifySignature(pubkey, hash, signature []byte) bool {
+	return secp256k1.VerifySignature(pubkey, hash, signature)
 }
 
 // DecompressPubkey parses a public key in the 33-byte compressed format.

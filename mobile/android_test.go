@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -28,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cespare/cp"
+	"github.com/xpaymentsorg/go-xpayments/internal/build"
 )
 
 // androidTestClass is a Java class to do some lightweight tests against the Android
@@ -158,8 +155,6 @@ public class AndroidTest extends InstrumentationTestCase {
 //
 // This method has been adapted from golang.org/x/mobile/bind/java/seq_test.go/runTest
 func TestAndroid(t *testing.T) {
-	t.Skip("XPS: We do not test this")
-
 	// Skip tests on Windows altogether
 	if runtime.GOOS == "windows" {
 		t.Skip("cannot test Android bindings on Windows, skipping")
@@ -217,7 +212,7 @@ func TestAndroid(t *testing.T) {
 		t.Logf("%s", output)
 		t.Fatalf("failed to run gomobile bind: %v", err)
 	}
-	cp.CopyFile(filepath.Join("libs", "geth.aar"), "geth.aar")
+	build.CopyFile(filepath.Join("libs", "geth.aar"), "geth.aar", os.ModePerm)
 
 	if err = ioutil.WriteFile(filepath.Join("src", "androidTest", "java", "org", "ethereum", "gethtest", "AndroidTest.java"), []byte(androidTestClass), os.ModePerm); err != nil {
 		t.Fatalf("failed to write Android test class: %v", err)

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -30,7 +27,7 @@ import (
 )
 
 var (
-	// ErrBadProDAOExtra is returned if a header doesn't support the DAO fork on a
+	// ErrBadProDAOExtra is returned if a header doens't support the DAO fork on a
 	// pro-fork client.
 	ErrBadProDAOExtra = errors.New("bad DAO pro-fork extra-data")
 

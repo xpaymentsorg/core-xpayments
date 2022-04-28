@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -29,20 +26,16 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"gopkg.in/urfave/cli.v1"
 )
 
 const (
@@ -69,7 +62,7 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-func StartNode(ctx *cli.Context, stack *node.Node) {
+func StartNode(stack *node.Node) {
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
@@ -77,20 +70,9 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
-
-		minFreeDiskSpace := ethconfig.Defaults.TrieDirtyCache
-		if ctx.GlobalIsSet(MinFreeDiskSpaceFlag.Name) {
-			minFreeDiskSpace = ctx.GlobalInt(MinFreeDiskSpaceFlag.Name)
-		} else if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
-			minFreeDiskSpace = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
-		}
-		if minFreeDiskSpace > 0 {
-			go monitorFreeDiskSpace(sigc, stack.InstanceDir(), uint64(minFreeDiskSpace)*1024*1024)
-		}
-
 		<-sigc
 		log.Info("Got interrupt, shutting down...")
-		go stack.Close()
+		go stack.Stop()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
@@ -100,24 +82,6 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 		debug.Exit() // ensure trace and CPU profile data is flushed.
 		debug.LoudPanic("boom")
 	}()
-}
-
-func monitorFreeDiskSpace(sigc chan os.Signal, path string, freeDiskSpaceCritical uint64) {
-	for {
-		freeSpace, err := getFreeDiskSpace(path)
-		if err != nil {
-			log.Warn("Failed to get free disk space", "path", path, "err", err)
-			break
-		}
-		if freeSpace < freeDiskSpaceCritical {
-			log.Error("Low disk space. Gracefully shutting down Geth to prevent database corruption.", "available", common.StorageSize(freeSpace))
-			sigc <- syscall.SIGTERM
-			break
-		} else if freeSpace < 2*freeDiskSpaceCritical {
-			log.Warn("Disk space is running low. Geth will shutdown if disk space runs below critical level.", "available", common.StorageSize(freeSpace), "critical_level", common.StorageSize(freeDiskSpaceCritical))
-		}
-		time.Sleep(60 * time.Second)
-	}
 }
 
 func ImportChain(chain *core.BlockChain, fn string) error {
@@ -273,7 +237,7 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 }
 
 // ImportPreimages imports a batch of exported hash preimages into the database.
-func ImportPreimages(db ethdb.Database, fn string) error {
+func ImportPreimages(db *ethdb.LDBDatabase, fn string) error {
 	log.Info("Importing preimages", "file", fn)
 
 	// Open the file handle and potentially unwrap the gzip stream
@@ -307,20 +271,22 @@ func ImportPreimages(db ethdb.Database, fn string) error {
 		// Accumulate the preimages and flush when enough ws gathered
 		preimages[crypto.Keccak256Hash(blob)] = common.CopyBytes(blob)
 		if len(preimages) > 1024 {
-			rawdb.WritePreimages(db, preimages)
+			if err := core.WritePreimages(db, 0, preimages); err != nil {
+				return err
+			}
 			preimages = make(map[common.Hash][]byte)
 		}
 	}
 	// Flush the last batch preimage data
 	if len(preimages) > 0 {
-		rawdb.WritePreimages(db, preimages)
+		return core.WritePreimages(db, 0, preimages)
 	}
 	return nil
 }
 
 // ExportPreimages exports all known hash preimages into the specified file,
 // truncating any data already present in the file.
-func ExportPreimages(db ethdb.Database, fn string) error {
+func ExportPreimages(db *ethdb.LDBDatabase, fn string) error {
 	log.Info("Exporting preimages", "file", fn)
 
 	// Open the file handle and potentially wrap with a gzip stream
@@ -336,9 +302,7 @@ func ExportPreimages(db ethdb.Database, fn string) error {
 		defer writer.(*gzip.Writer).Close()
 	}
 	// Iterate over the preimages and export them
-	it := db.NewIterator([]byte("secure-key-"), nil)
-	defer it.Release()
-
+	it := db.NewIteratorWithPrefix([]byte("secure-key-"))
 	for it.Next() {
 		if err := rlp.Encode(writer, it.Value()); err != nil {
 			return err

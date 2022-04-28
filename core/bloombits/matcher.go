@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -62,7 +59,7 @@ type partialMatches struct {
 // It can also have the actual results set to be used as a delivery data struct.
 //
 // The contest and error fields are used by the light client to terminate matching
-// early if an error is encountered on some path of the pipeline.
+// early if an error is enountered on some path of the pipeline.
 type Retrieval struct {
 	Bit      uint
 	Sections []uint64
@@ -158,6 +155,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 	session := &MatcherSession{
 		matcher: m,
 		quit:    make(chan struct{}),
+		kill:    make(chan struct{}),
 		ctx:     ctx,
 	}
 	for _, scheduler := range m.schedulers {
@@ -220,7 +218,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 // run creates a daisy-chain of sub-matchers, one for the address set and one
 // for each topic set, each sub-matcher receiving a section only if the previous
 // ones have all found a potential match in one of the blocks of the section,
-// then binary AND-ing its own matches and forwarding the result to the next one.
+// then binary AND-ing its own matches and forwaring the result to the next one.
 //
 // The method starts feeding the section indexes into the first sub-matcher on a
 // new goroutine and returns a sink channel receiving the results.
@@ -388,11 +386,13 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 		requests   = make(map[uint][]uint64) // Per-bit list of section requests, ordered by section number
 		unallocs   = make(map[uint]struct{}) // Bits with pending requests but not allocated to any retriever
 		retrievers chan chan uint            // Waiting retrievers (toggled to nil if unallocs is empty)
-		allocs     int                       // Number of active allocations to handle graceful shutdown requests
-		shutdown   = session.quit            // Shutdown request channel, will gracefully wait for pending requests
+	)
+	var (
+		allocs   int            // Number of active allocations to handle graceful shutdown requests
+		shutdown = session.quit // Shutdown request channel, will gracefully wait for pending requests
 	)
 
-	// assign is a helper method fo try to assign a pending bit an actively
+	// assign is a helper method fo try to assign a pending bit an an actively
 	// listening servicer, or schedule it up for later when one arrives.
 	assign := func(bit uint) {
 		select {
@@ -409,12 +409,15 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 	for {
 		select {
 		case <-shutdown:
-			// Shutdown requested. No more retrievers can be allocated,
-			// but we still need to wait until all pending requests have returned.
-			shutdown = nil
+			// Graceful shutdown requested, wait until all pending requests are honoured
 			if allocs == 0 {
 				return
 			}
+			shutdown = nil
+
+		case <-session.kill:
+			// Pending requests not honoured in time, hard terminate
+			return
 
 		case req := <-dist:
 			// New retrieval request arrived to be distributed to some fetcher process
@@ -496,9 +499,8 @@ func (m *Matcher) distributor(dist chan *request, session *MatcherSession) {
 					assign(result.Bit)
 				}
 			}
-
-			// End the session when all pending deliveries have arrived.
-			if shutdown == nil && allocs == 0 {
+			// If we're in the process of shutting down, terminate
+			if allocs == 0 && shutdown == nil {
 				return
 			}
 		}
@@ -512,10 +514,10 @@ type MatcherSession struct {
 
 	closer sync.Once     // Sync object to ensure we only ever close once
 	quit   chan struct{} // Quit channel to request pipeline termination
+	kill   chan struct{} // Term channel to signal non-graceful forced shutdown
 
-	ctx     context.Context // Context used by the light client to abort filtering
-	err     error           // Global error to track retrieval failures deep in the chain
-	errLock sync.Mutex
+	ctx context.Context // Context used by the light client to abort filtering
+	err atomic.Value    // Global error to track retrieval failures deep in the chain
 
 	pend sync.WaitGroup
 }
@@ -527,22 +529,23 @@ func (s *MatcherSession) Close() {
 	s.closer.Do(func() {
 		// Signal termination and wait for all goroutines to tear down
 		close(s.quit)
+		time.AfterFunc(time.Second, func() { close(s.kill) })
 		s.pend.Wait()
 	})
 }
 
 // Error returns any failure encountered during the matching session.
 func (s *MatcherSession) Error() error {
-	s.errLock.Lock()
-	defer s.errLock.Unlock()
-
-	return s.err
+	if err := s.err.Load(); err != nil {
+		return err.(error)
+	}
+	return nil
 }
 
-// allocateRetrieval assigns a bloom bit index to a client process that can either
-// immediately request and fetch the section contents assigned to this bit or wait
+// AllocateRetrieval assigns a bloom bit index to a client process that can either
+// immediately reuest and fetch the section contents assigned to this bit or wait
 // a little while for more sections to be requested.
-func (s *MatcherSession) allocateRetrieval() (uint, bool) {
+func (s *MatcherSession) AllocateRetrieval() (uint, bool) {
 	fetcher := make(chan uint)
 
 	select {
@@ -554,9 +557,9 @@ func (s *MatcherSession) allocateRetrieval() (uint, bool) {
 	}
 }
 
-// pendingSections returns the number of pending section retrievals belonging to
+// PendingSections returns the number of pending section retrievals belonging to
 // the given bloom bit index.
-func (s *MatcherSession) pendingSections(bit uint) int {
+func (s *MatcherSession) PendingSections(bit uint) int {
 	fetcher := make(chan uint)
 
 	select {
@@ -568,9 +571,9 @@ func (s *MatcherSession) pendingSections(bit uint) int {
 	}
 }
 
-// allocateSections assigns all or part of an already allocated bit-task queue
+// AllocateSections assigns all or part of an already allocated bit-task queue
 // to the requesting process.
-func (s *MatcherSession) allocateSections(bit uint, count int) []uint64 {
+func (s *MatcherSession) AllocateSections(bit uint, count int) []uint64 {
 	fetcher := make(chan *Retrieval)
 
 	select {
@@ -586,14 +589,18 @@ func (s *MatcherSession) allocateSections(bit uint, count int) []uint64 {
 	}
 }
 
-// deliverSections delivers a batch of section bit-vectors for a specific bloom
+// DeliverSections delivers a batch of section bit-vectors for a specific bloom
 // bit index to be injected into the processing pipeline.
-func (s *MatcherSession) deliverSections(bit uint, sections []uint64, bitsets [][]byte) {
-	s.matcher.deliveries <- &Retrieval{Bit: bit, Sections: sections, Bitsets: bitsets}
+func (s *MatcherSession) DeliverSections(bit uint, sections []uint64, bitsets [][]byte) {
+	select {
+	case <-s.kill:
+		return
+	case s.matcher.deliveries <- &Retrieval{Bit: bit, Sections: sections, Bitsets: bitsets}:
+	}
 }
 
-// Multiplex polls the matcher session for retrieval tasks and multiplexes it into
-// the requested retrieval queue to be serviced together with other sessions.
+// Multiplex polls the matcher session for rerieval tasks and multiplexes it into
+// the reuested retrieval queue to be serviced together with other sessions.
 //
 // This method will block for the lifetime of the session. Even after termination
 // of the session, any request in-flight need to be responded to! Empty responses
@@ -601,17 +608,17 @@ func (s *MatcherSession) deliverSections(bit uint, sections []uint64, bitsets []
 func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan *Retrieval) {
 	for {
 		// Allocate a new bloom bit index to retrieve data for, stopping when done
-		bit, ok := s.allocateRetrieval()
+		bit, ok := s.AllocateRetrieval()
 		if !ok {
 			return
 		}
 		// Bit allocated, throttle a bit if we're below our batch limit
-		if s.pendingSections(bit) < batch {
+		if s.PendingSections(bit) < batch {
 			select {
 			case <-s.quit:
 				// Session terminating, we can't meaningfully service, abort
-				s.allocateSections(bit, 0)
-				s.deliverSections(bit, []uint64{}, [][]byte{})
+				s.AllocateSections(bit, 0)
+				s.DeliverSections(bit, []uint64{}, [][]byte{})
 				return
 
 			case <-time.After(wait):
@@ -619,13 +626,13 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 			}
 		}
 		// Allocate as much as we can handle and request servicing
-		sections := s.allocateSections(bit, batch)
+		sections := s.AllocateSections(bit, batch)
 		request := make(chan *Retrieval)
 
 		select {
 		case <-s.quit:
 			// Session terminating, we can't meaningfully service, abort
-			s.deliverSections(bit, sections, make([][]byte, len(sections)))
+			s.DeliverSections(bit, sections, make([][]byte, len(sections)))
 			return
 
 		case mux <- request:
@@ -634,12 +641,10 @@ func (s *MatcherSession) Multiplex(batch int, wait time.Duration, mux chan chan 
 
 			result := <-request
 			if result.Error != nil {
-				s.errLock.Lock()
-				s.err = result.Error
-				s.errLock.Unlock()
+				s.err.Store(result.Error)
 				s.Close()
 			}
-			s.deliverSections(result.Bit, result.Sections, result.Bitsets)
+			s.DeliverSections(result.Bit, result.Sections, result.Bitsets)
 		}
 	}
 }

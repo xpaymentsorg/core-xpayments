@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -67,7 +64,7 @@ func (u URL) String() string {
 func (u URL) TerminalString() string {
 	url := u.String()
 	if len(url) > 32 {
-		return url[:31] + ".."
+		return url[:31] + "…"
 	}
 	return url
 }
@@ -75,22 +72,6 @@ func (u URL) TerminalString() string {
 // MarshalJSON implements the json.Marshaller interface.
 func (u URL) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.String())
-}
-
-// UnmarshalJSON parses url.
-func (u *URL) UnmarshalJSON(input []byte) error {
-	var textURL string
-	err := json.Unmarshal(input, &textURL)
-	if err != nil {
-		return err
-	}
-	url, err := parseURL(textURL)
-	if err != nil {
-		return err
-	}
-	u.Scheme = url.Scheme
-	u.Path = url.Path
-	return nil
 }
 
 // Cmp compares x and y and returns:

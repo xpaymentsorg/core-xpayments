@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +22,7 @@ import (
 	"encoding/json"
 
 	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discv5"
 	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
@@ -35,9 +32,9 @@ func MainnetGenesis() string {
 	return ""
 }
 
-// RopstenGenesis returns the JSON spec to use for the Ropsten test network.
-func RopstenGenesis() string {
-	enc, err := json.Marshal(core.DefaultRopstenGenesisBlock())
+// TestnetGenesis returns the JSON spec to use for the Ethereum test network.
+func TestnetGenesis() string {
+	enc, err := json.Marshal(core.DefaultTestnetGenesisBlock())
 	if err != nil {
 		panic(err)
 	}
@@ -53,43 +50,12 @@ func RinkebyGenesis() string {
 	return string(enc)
 }
 
-// GoerliGenesis returns the JSON spec to use for the Goerli test network
-func GoerliGenesis() string {
-	enc, err := json.Marshal(core.DefaultGoerliGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
-
-// BerylliumGenesis returns the JSON spec to use for the Mumbai test network
-func BerylliumGenesis() string {
-	enc, err := json.Marshal(core.DefaultBerylliumGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
-
-// XPSMainnetGenesis returns the JSON spec to use for the Mumbai test network
-func XPSMainnetGenesis() string {
-	enc, err := json.Marshal(core.DefaultXPSMainnetGenesisBlock())
-	if err != nil {
-		panic(err)
-	}
-	return string(enc)
-}
-
 // FoundationBootnodes returns the enode URLs of the P2P bootstrap nodes operated
 // by the foundation running the V5 discovery protocol.
 func FoundationBootnodes() *Enodes {
-	nodes := &Enodes{nodes: make([]*enode.Node, len(params.MainnetBootnodes))}
-	for i, url := range params.MainnetBootnodes {
-		var err error
-		nodes.nodes[i], err = enode.Parse(enode.ValidSchemes, url)
-		if err != nil {
-			panic("invalid node URL: " + err.Error())
-		}
+	nodes := &Enodes{nodes: make([]*discv5.Node, len(params.DiscoveryV5Bootnodes))}
+	for i, url := range params.DiscoveryV5Bootnodes {
+		nodes.nodes[i] = discv5.MustParseNode(url)
 	}
 	return nodes
 }

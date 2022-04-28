@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -42,9 +39,10 @@ type Feed struct {
 	sendCases caseList         // the active set of select cases used by Send
 
 	// The inbox holds newly subscribed channels until they are added to sendCases.
-	mu    sync.Mutex
-	inbox caseList
-	etype reflect.Type
+	mu     sync.Mutex
+	inbox  caseList
+	etype  reflect.Type
+	closed bool
 }
 
 // This is the index of the first actual subscription channel in sendCases.
@@ -141,7 +139,6 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 
 	if !f.typecheck(rvalue.Type()) {
 		f.sendLock <- struct{}{}
-		f.mu.Unlock()
 		panic(feedTypeError{op: "Send", got: rvalue.Type(), want: f.etype})
 	}
 	f.mu.Unlock()
@@ -151,9 +148,7 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 		f.sendCases[i].Send = rvalue
 	}
 
-	// Send until all channels except removeSub have been chosen. 'cases' tracks a prefix
-	// of sendCases. When a send succeeds, the corresponding case moves to the end of
-	// 'cases' and it shrinks by one element.
+	// Send until all channels except removeSub have been chosen.
 	cases := f.sendCases
 	for {
 		// Fast path: try sending without blocking before adding to the select set.
@@ -175,7 +170,6 @@ func (f *Feed) Send(value interface{}) (nsent int) {
 			index := f.sendCases.find(recv.Interface())
 			f.sendCases = f.sendCases.delete(index)
 			if index >= 0 && index < len(cases) {
-				// Shrink 'cases' too because the removed case was still active.
 				cases = f.sendCases[:len(cases)-1]
 			}
 		} else {

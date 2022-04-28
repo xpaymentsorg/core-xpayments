@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -27,19 +24,24 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
 )
 
 func newEmptySecure() *SecureTrie {
-	trie, _ := NewSecure(common.Hash{}, NewDatabase(memorydb.New()))
+	diskdb, _ := ethdb.NewMemDatabase()
+	triedb := NewDatabase(diskdb)
+
+	trie, _ := NewSecure(common.Hash{}, triedb, 0)
 	return trie
 }
 
 // makeTestSecureTrie creates a large enough secure trie for testing.
 func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
-	triedb := NewDatabase(memorydb.New())
-	trie, _ := NewSecure(common.Hash{}, triedb)
+	diskdb, _ := ethdb.NewMemDatabase()
+	triedb := NewDatabase(diskdb)
+
+	trie, _ := NewSecure(common.Hash{}, triedb, 0)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)

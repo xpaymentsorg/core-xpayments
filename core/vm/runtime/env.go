@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,26 +17,25 @@
 package runtime
 
 import (
+	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {
-	txContext := vm.TxContext{
-		Origin:   cfg.Origin,
-		GasPrice: cfg.GasPrice,
-	}
-	blockContext := vm.BlockContext{
+	context := vm.Context{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
-		GetHash:     cfg.GetHashFn,
+		GetHash:     func(uint64) common.Hash { return common.Hash{} },
+
+		Origin:      cfg.Origin,
 		Coinbase:    cfg.Coinbase,
 		BlockNumber: cfg.BlockNumber,
 		Time:        cfg.Time,
 		Difficulty:  cfg.Difficulty,
 		GasLimit:    cfg.GasLimit,
-		BaseFee:     cfg.BaseFee,
+		GasPrice:    cfg.GasPrice,
 	}
 
-	return vm.NewEVM(blockContext, txContext, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
+	return vm.NewEVM(context, cfg.State, cfg.ChainConfig, cfg.EVMConfig)
 }

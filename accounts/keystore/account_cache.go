@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -30,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/log"
+	"gopkg.in/fatih/set.v0"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
@@ -82,7 +79,7 @@ func newAccountCache(keydir string) (*accountCache, chan struct{}) {
 		keydir: keydir,
 		byAddr: make(map[common.Address][]accounts.Account),
 		notify: make(chan struct{}, 1),
-		fileC:  fileCache{all: mapset.NewThreadUnsafeSet()},
+		fileC:  fileCache{all: set.NewNonTS()},
 	}
 	ac.watcher = newWatcher(ac)
 	return ac, ac.notify
@@ -240,7 +237,7 @@ func (ac *accountCache) scanAccounts() error {
 		log.Debug("Failed to reload keystore contents", "err", err)
 		return err
 	}
-	if creates.Cardinality() == 0 && deletes.Cardinality() == 0 && updates.Cardinality() == 0 {
+	if creates.Size() == 0 && deletes.Size() == 0 && updates.Size() == 0 {
 		return nil
 	}
 	// Create a helper method to scan the contents of the key files
@@ -265,28 +262,25 @@ func (ac *accountCache) scanAccounts() error {
 		switch {
 		case err != nil:
 			log.Debug("Failed to decode keystore key", "path", path, "err", err)
-		case addr == common.Address{}:
+		case (addr == common.Address{}):
 			log.Debug("Failed to decode keystore key", "path", path, "err", "missing or zero address")
 		default:
-			return &accounts.Account{
-				Address: addr,
-				URL:     accounts.URL{Scheme: KeyStoreScheme, Path: path},
-			}
+			return &accounts.Account{Address: addr, URL: accounts.URL{Scheme: KeyStoreScheme, Path: path}}
 		}
 		return nil
 	}
 	// Process all the file diffs
 	start := time.Now()
 
-	for _, p := range creates.ToSlice() {
+	for _, p := range creates.List() {
 		if a := readAccount(p.(string)); a != nil {
 			ac.add(*a)
 		}
 	}
-	for _, p := range deletes.ToSlice() {
+	for _, p := range deletes.List() {
 		ac.deleteByFile(p.(string))
 	}
-	for _, p := range updates.ToSlice() {
+	for _, p := range updates.List() {
 		path := p.(string)
 		ac.deleteByFile(path)
 		if a := readAccount(path); a != nil {

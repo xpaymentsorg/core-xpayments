@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -34,7 +31,6 @@ import (
 	"time"
 
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
-	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 )
 
@@ -79,8 +75,7 @@ func TestAccountManagement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create signer account: %v", err)
 	}
-	tx := types.NewTransaction(0, common.Address{}, big.NewInt(0), 0, big.NewInt(0), nil)
-	chain := big.NewInt(1)
+	tx, chain := new(types.Transaction), big.NewInt(1)
 
 	// Sign a transaction with a single authorization
 	if _, err := ks.SignTxWithPassphrase(signer, "Signer password", tx, chain); err != nil {

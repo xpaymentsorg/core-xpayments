@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -38,7 +35,7 @@ var ErrNotSupported = errors.New("not supported")
 
 // ErrInvalidPassphrase is returned when a decryption operation receives a bad
 // passphrase.
-var ErrInvalidPassphrase = errors.New("invalid password")
+var ErrInvalidPassphrase = errors.New("invalid passphrase")
 
 // ErrWalletAlreadyOpen is returned if a wallet is attempted to be opened the
 // second time.

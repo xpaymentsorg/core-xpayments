@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -31,9 +28,10 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"github.com/xpaymentsorg/go-xpayments/p2p/simulations"
 	"github.com/xpaymentsorg/go-xpayments/p2p/simulations/adapters"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
 var adapterType = flag.String("adapter", "sim", `node adapter to use (one of "sim", "exec" or "docker")`)
@@ -47,14 +45,12 @@ func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	// register a single ping-pong service
-	services := map[string]adapters.LifecycleConstructor{
-		"ping-pong": func(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
-			pps := newPingPongService(ctx.Config.ID)
-			stack.RegisterProtocols(pps.Protocols())
-			return pps, nil
+	services := map[string]adapters.ServiceFunc{
+		"ping-pong": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			return newPingPongService(ctx.Config.ID), nil
 		},
 	}
-	adapters.RegisterLifecycles(services)
+	adapters.RegisterServices(services)
 
 	// create the NodeAdapter
 	var adapter adapters.NodeAdapter
@@ -74,6 +70,14 @@ func main() {
 		log.Info("using exec adapter", "tmpdir", tmpdir)
 		adapter = adapters.NewExecAdapter(tmpdir)
 
+	case "docker":
+		log.Info("using docker adapter")
+		var err error
+		adapter, err = adapters.NewDockerAdapter()
+		if err != nil {
+			log.Crit("error creating docker adapter", "err", err)
+		}
+
 	default:
 		log.Crit(fmt.Sprintf("unknown node adapter %q", *adapterType))
 	}
@@ -92,12 +96,12 @@ func main() {
 // sends a ping to all its connected peers every 10s and receives a pong in
 // return
 type pingPongService struct {
-	id       enode.ID
+	id       discover.NodeID
 	log      log.Logger
 	received int64
 }
 
-func newPingPongService(id enode.ID) *pingPongService {
+func newPingPongService(id discover.NodeID) *pingPongService {
 	return &pingPongService{
 		id:  id,
 		log: log.New("node.id", id),
@@ -114,7 +118,11 @@ func (p *pingPongService) Protocols() []p2p.Protocol {
 	}}
 }
 
-func (p *pingPongService) Start() error {
+func (p *pingPongService) APIs() []rpc.API {
+	return nil
+}
+
+func (p *pingPongService) Start(server *p2p.Server) error {
 	p.log.Info("ping-pong service starting")
 	return nil
 }

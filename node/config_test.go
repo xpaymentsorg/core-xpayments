@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -41,21 +38,13 @@ func TestDatadirCreation(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	node, err := New(&Config{DataDir: dir})
-	if err != nil {
+	if _, err := New(&Config{DataDir: dir}); err != nil {
 		t.Fatalf("failed to create stack with existing datadir: %v", err)
-	}
-	if err := node.Close(); err != nil {
-		t.Fatalf("failed to close node: %v", err)
 	}
 	// Generate a long non-existing datadir path and check that it gets created by a node
 	dir = filepath.Join(dir, "a", "b", "c", "d", "e", "f")
-	node, err = New(&Config{DataDir: dir})
-	if err != nil {
+	if _, err := New(&Config{DataDir: dir}); err != nil {
 		t.Fatalf("failed to create stack with creatable datadir: %v", err)
-	}
-	if err := node.Close(); err != nil {
-		t.Fatalf("failed to close node: %v", err)
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("freshly created datadir not accessible: %v", err)
@@ -68,12 +57,8 @@ func TestDatadirCreation(t *testing.T) {
 	defer os.Remove(file.Name())
 
 	dir = filepath.Join(file.Name(), "invalid/path")
-	node, err = New(&Config{DataDir: dir})
-	if err == nil {
+	if _, err := New(&Config{DataDir: dir}); err == nil {
 		t.Fatalf("protocol stack created with an invalid datadir")
-		if err := node.Close(); err != nil {
-			t.Fatalf("failed to close node: %v", err)
-		}
 	}
 }
 

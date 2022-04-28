@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -38,78 +35,56 @@ type ChainContext interface {
 	GetHeader(common.Hash, uint64) *types.Header
 }
 
-// NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
-	var (
-		beneficiary common.Address
-		baseFee     *big.Int
-	)
-
+// NewEVMContext creates a new context for use in the EVM.
+func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author *common.Address) vm.Context {
 	// If we don't have an explicit author (i.e. not mining), extract from the header
+	var beneficiary common.Address
 	if author == nil {
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author
 	}
-	if header.BaseFee != nil {
-		baseFee = new(big.Int).Set(header.BaseFee)
-	}
-	return vm.BlockContext{
+	return vm.Context{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
+		Origin:      msg.From(),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
-		Time:        new(big.Int).SetUint64(header.Time),
+		Time:        new(big.Int).Set(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
-		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
-	}
-}
-
-// NewEVMTxContext creates a new transaction context for a single transaction.
-func NewEVMTxContext(msg Message) vm.TxContext {
-	return vm.TxContext{
-		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
+		GasPrice:    new(big.Int).Set(msg.GasPrice()),
 	}
 }
 
 // GetHashFn returns a GetHashFunc which retrieves header hashes by number
 func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash {
-	// Cache will initially contain [refHash.parent],
-	// Then fill up with [refHash.p, refHash.pp, refHash.ppp, ...]
-	var cache []common.Hash
+	var cache map[uint64]common.Hash
 
 	return func(n uint64) common.Hash {
 		// If there's no hash cache yet, make one
-		if len(cache) == 0 {
-			cache = append(cache, ref.ParentHash)
-		}
-		if idx := ref.Number.Uint64() - n - 1; idx < uint64(len(cache)) {
-			return cache[idx]
-		}
-		// No luck in the cache, but we can start iterating from the last element we already know
-		lastKnownHash := cache[len(cache)-1]
-		lastKnownNumber := ref.Number.Uint64() - uint64(len(cache))
-
-		for {
-			header := chain.GetHeader(lastKnownHash, lastKnownNumber)
-			if header == nil {
-				break
+		if cache == nil {
+			cache = map[uint64]common.Hash{
+				ref.Number.Uint64() - 1: ref.ParentHash,
 			}
-			cache = append(cache, header.ParentHash)
-			lastKnownHash = header.ParentHash
-			lastKnownNumber = header.Number.Uint64() - 1
-			if n == lastKnownNumber {
-				return lastKnownHash
+		}
+		// Try to fulfill the request from the cache
+		if hash, ok := cache[n]; ok {
+			return hash
+		}
+		// Not cached, iterate the blocks and cache the hashes
+		for header := chain.GetHeader(ref.ParentHash, ref.Number.Uint64()-1); header != nil; header = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1) {
+			cache[header.Number.Uint64()-1] = header.ParentHash
+			if n == header.Number.Uint64()-1 {
+				return header.ParentHash
 			}
 		}
 		return common.Hash{}
 	}
 }
 
-// CanTransfer checks whether there are enough funds in the address' account to make a transfer.
+// CanTransfer checks wether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 	return db.GetBalance(addr).Cmp(amount) >= 0
@@ -117,17 +92,6 @@ func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db
 func Transfer(db vm.StateDB, sender, recipient common.Address, amount *big.Int) {
-	// get inputs before
-	input1 := db.GetBalance(sender)
-	input2 := db.GetBalance(recipient)
-
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-
-	// get outputs after
-	output1 := db.GetBalance(sender)
-	output2 := db.GetBalance(recipient)
-
-	// add transfer log
-	AddTransferLog(db, sender, recipient, amount, input1, input2, output1, output2)
 }

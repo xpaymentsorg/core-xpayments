@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -38,7 +35,6 @@ func TestSchedulerMultiClientSingleFetcher(t *testing.T)  { testScheduler(t, 10,
 func TestSchedulerMultiClientMultiFetcher(t *testing.T)   { testScheduler(t, 10, 10, 5000) }
 
 func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
-	t.Parallel()
 	f := newScheduler(0)
 
 	// Create a batch of handler goroutines that respond to bloom bit requests and
@@ -92,10 +88,10 @@ func testScheduler(t *testing.T, clients int, fetchers int, requests int) {
 				}
 				close(in)
 			}()
-			b := new(big.Int)
+
 			for j := 0; j < requests; j++ {
 				bits := <-out
-				if want := b.SetUint64(uint64(j)).Bytes(); !bytes.Equal(bits, want) {
+				if want := new(big.Int).SetUint64(uint64(j)).Bytes(); !bytes.Equal(bits, want) {
 					t.Errorf("vector %d: delivered content mismatch: have %x, want %x", j, bits, want)
 				}
 			}

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -60,43 +57,4 @@ func TestGenerator(t *testing.T) {
 			t.Errorf("output %d: bit vector mismatch have %x, want %x", i, have, want)
 		}
 	}
-}
-
-func BenchmarkGenerator(b *testing.B) {
-	var input [types.BloomBitLength][types.BloomByteLength]byte
-	b.Run("empty", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			// Crunch the input through the generator and verify the result
-			gen, err := NewGenerator(types.BloomBitLength)
-			if err != nil {
-				b.Fatalf("failed to create bloombit generator: %v", err)
-			}
-			for j, bloom := range &input {
-				if err := gen.AddBloom(uint(j), bloom); err != nil {
-					b.Fatalf("bloom %d: failed to add: %v", i, err)
-				}
-			}
-		}
-	})
-	for i := 0; i < types.BloomBitLength; i++ {
-		rand.Read(input[i][:])
-	}
-	b.Run("random", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			// Crunch the input through the generator and verify the result
-			gen, err := NewGenerator(types.BloomBitLength)
-			if err != nil {
-				b.Fatalf("failed to create bloombit generator: %v", err)
-			}
-			for j, bloom := range &input {
-				if err := gen.AddBloom(uint(j), bloom); err != nil {
-					b.Fatalf("bloom %d: failed to add: %v", i, err)
-				}
-			}
-		}
-	})
 }

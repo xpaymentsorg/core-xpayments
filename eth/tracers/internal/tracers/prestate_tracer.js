@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -43,7 +40,10 @@
 		var idx = toHex(key);
 
 		if (this.prestate[acc].storage[idx] === undefined) {
-			this.prestate[acc].storage[idx] = toHex(db.getState(addr, key));
+			var val = toHex(db.getState(addr, key));
+			if (val != "0x0000000000000000000000000000000000000000000000000000000000000000") {
+				this.prestate[acc].storage[idx] = toHex(db.getState(addr, key));
+			}
 		}
 	},
 
@@ -58,7 +58,7 @@
 		var toBal   = bigInt(this.prestate[toHex(ctx.to)].balance.slice(2), 16);
 
 		this.prestate[toHex(ctx.to)].balance   = '0x'+toBal.subtract(ctx.value).toString(16);
-		this.prestate[toHex(ctx.from)].balance = '0x'+fromBal.add(ctx.value).add((ctx.gasUsed + ctx.intrinsicGas) * ctx.gasPrice).toString(16);
+		this.prestate[toHex(ctx.from)].balance = '0x'+fromBal.add(ctx.value).toString(16);
 
 		// Decrement the caller's nonce, and remove empty create targets
 		this.prestate[toHex(ctx.from)].nonce--;
@@ -88,14 +88,6 @@
 			case "CREATE":
 				var from = log.contract.getAddress();
 				this.lookupAccount(toContract(from, db.getNonce(from)), db);
-				break;
-			case "CREATE2":
-				var from = log.contract.getAddress();
-				// stack: salt, size, offset, endowment
-				var offset = log.stack.peek(1).valueOf()
-				var size = log.stack.peek(2).valueOf()
-				var end = offset + size
-				this.lookupAccount(toContract2(from, log.stack.peek(3).toString(16), log.memory.slice(offset, end)), db);
 				break;
 			case "CALL": case "CALLCODE": case "DELEGATECALL": case "STATICCALL":
 				this.lookupAccount(toAddress(log.stack.peek(1).toString(16)), db);

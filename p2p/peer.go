@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2014 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,7 +17,6 @@
 package p2p
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -31,14 +27,8 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/metrics"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enr"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
-)
-
-var (
-	ErrShuttingDown = errors.New("shutting down")
 )
 
 const (
@@ -57,6 +47,8 @@ const (
 	discMsg      = 0x01
 	pingMsg      = 0x02
 	pongMsg      = 0x03
+	getPeersMsg  = 0x04
+	peersMsg     = 0x05
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
@@ -65,7 +57,7 @@ type protoHandshake struct {
 	Name       string
 	Caps       []Cap
 	ListenPort uint64
-	ID         []byte // secp256k1 public key
+	ID         discover.NodeID
 
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
@@ -95,14 +87,12 @@ const (
 // PeerEvent is an event emitted when peers are either added or dropped from
 // a p2p.Server or when a message is sent or received on a peer connection
 type PeerEvent struct {
-	Type          PeerEventType `json:"type"`
-	Peer          enode.ID      `json:"peer"`
-	Error         string        `json:"error,omitempty"`
-	Protocol      string        `json:"protocol,omitempty"`
-	MsgCode       *uint64       `json:"msg_code,omitempty"`
-	MsgSize       *uint32       `json:"msg_size,omitempty"`
-	LocalAddress  string        `json:"local,omitempty"`
-	RemoteAddress string        `json:"remote,omitempty"`
+	Type     PeerEventType   `json:"type"`
+	Peer     discover.NodeID `json:"peer"`
+	Error    string          `json:"error,omitempty"`
+	Protocol string          `json:"protocol,omitempty"`
+	MsgCode  *uint64         `json:"msg_code,omitempty"`
+	MsgSize  *uint32         `json:"msg_size,omitempty"`
 }
 
 // Peer represents a connected remote node.
@@ -119,49 +109,25 @@ type Peer struct {
 
 	// events receives message send / receive events if set
 	events   *event.Feed
-	testPipe *MsgPipeRW // for testing
+	PairPeer *Peer
 }
 
 // NewPeer returns a peer for testing purposes.
-func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
+func NewPeer(id discover.NodeID, name string, caps []Cap) *Peer {
 	pipe, _ := net.Pipe()
-	node := enode.SignNull(new(enr.Record), id)
-	conn := &conn{fd: pipe, transport: nil, node: node, caps: caps, name: name}
-	peer := newPeer(log.Root(), conn, nil)
+	conn := &conn{fd: pipe, transport: nil, id: id, caps: caps, name: name}
+	peer := newPeer(conn, nil)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
 }
 
-// NewPeerPipe creates a peer for testing purposes.
-// The message pipe given as the last parameter is closed when
-// Disconnect is called on the peer.
-func NewPeerPipe(id enode.ID, name string, caps []Cap, pipe *MsgPipeRW) *Peer {
-	p := NewPeer(id, name, caps)
-	p.testPipe = pipe
-	return p
-}
-
 // ID returns the node's public key.
-func (p *Peer) ID() enode.ID {
-	return p.rw.node.ID()
+func (p *Peer) ID() discover.NodeID {
+	return p.rw.id
 }
 
-// Node returns the peer's node descriptor.
-func (p *Peer) Node() *enode.Node {
-	return p.rw.node
-}
-
-// Name returns an abbreviated form of the name
+// Name returns the node name that the remote node advertised.
 func (p *Peer) Name() string {
-	s := p.rw.name
-	if len(s) > 20 {
-		return s[:20] + "..."
-	}
-	return s
-}
-
-// Fullname returns the node name that the remote node advertised.
-func (p *Peer) Fullname() string {
 	return p.rw.name
 }
 
@@ -169,20 +135,6 @@ func (p *Peer) Fullname() string {
 func (p *Peer) Caps() []Cap {
 	// TODO: maybe return copy
 	return p.rw.caps
-}
-
-// RunningCap returns true if the peer is actively connected using any of the
-// enumerated versions of a specific protocol, meaning that at least one of the
-// versions is supported by both this node and the peer p.
-func (p *Peer) RunningCap(protocol string, versions []uint) bool {
-	if proto, ok := p.running[protocol]; ok {
-		for _, ver := range versions {
-			if proto.Version == ver {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // RemoteAddr returns the remote address of the network connection.
@@ -198,10 +150,6 @@ func (p *Peer) LocalAddr() net.Addr {
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
 func (p *Peer) Disconnect(reason DiscReason) {
-	if p.testPipe != nil {
-		p.testPipe.Close()
-	}
-
 	select {
 	case p.disc <- reason:
 	case <-p.closed:
@@ -210,16 +158,15 @@ func (p *Peer) Disconnect(reason DiscReason) {
 
 // String implements fmt.Stringer.
 func (p *Peer) String() string {
-	id := p.ID()
-	return fmt.Sprintf("Peer %x %v", id[:8], p.RemoteAddr())
+	return fmt.Sprintf("Peer %x %v ", p.rw.id[:8], p.RemoteAddr())
 }
 
 // Inbound returns true if the peer is an inbound connection
 func (p *Peer) Inbound() bool {
-	return p.rw.is(inboundConn)
+	return p.rw.flags&inboundConn != 0
 }
 
-func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
+func newPeer(conn *conn, protocols []Protocol) *Peer {
 	protomap := matchProtocols(protocols, conn.caps, conn)
 	p := &Peer{
 		rw:       conn,
@@ -228,7 +175,7 @@ func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
-		log:      log.New("id", conn.node.ID(), "conn", conn.flags),
+		log:      log.New("id", conn.id, "conn", conn.flags),
 	}
 	return p
 }
@@ -276,14 +223,15 @@ loop:
 			reason = discReasonForError(err)
 			break loop
 		case err = <-p.disc:
-			reason = discReasonForError(err)
 			break loop
 		}
 	}
-
 	close(p.closed)
 	p.rw.close(reason)
 	p.wg.Wait()
+	if p.PairPeer != nil {
+		go func() { p.PairPeer.Disconnect(DiscPairPeerStop) }()
+	}
 	return remoteRequested, err
 }
 
@@ -341,11 +289,6 @@ func (p *Peer) handle(msg Msg) error {
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
 		}
-		if metrics.Enabled {
-			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
-			metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
-			metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
-		}
 		select {
 		case proto.in <- msg:
 			return nil
@@ -402,11 +345,11 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		proto.werr = writeErr
 		var rw MsgReadWriter = proto
 		if p.events != nil {
-			rw = newMsgEventer(rw, p.events, p.ID(), proto.Name, p.Info().Network.RemoteAddress, p.Info().Network.LocalAddress)
+			rw = newMsgEventer(rw, p.events, p.ID(), proto.Name)
 		}
 		p.log.Trace(fmt.Sprintf("Starting protocol %s/%d", proto.Name, proto.Version))
+
 		go func() {
-			defer p.wg.Done()
 			err := proto.Run(p, rw)
 			if err == nil {
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
@@ -415,6 +358,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 				p.log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			p.protoErr <- err
+			p.wg.Done()
 		}()
 	}
 }
@@ -432,7 +376,7 @@ func (p *Peer) getProto(code uint64) (*protoRW, error) {
 
 type protoRW struct {
 	Protocol
-	in     chan Msg        // receives read messages
+	in     chan Msg        // receices read messages
 	closed <-chan struct{} // receives when peer is shutting down
 	wstart <-chan struct{} // receives when write may start
 	werr   chan<- error    // for write results
@@ -444,11 +388,7 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	if msg.Code >= rw.Length {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
-	msg.meterCap = rw.cap()
-	msg.meterCode = msg.Code
-
 	msg.Code += rw.offset
-
 	select {
 	case <-rw.wstart:
 		err = rw.w.WriteMsg(msg)
@@ -458,7 +398,7 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 		// as well but we don't want to rely on that.
 		rw.werr <- err
 	case <-rw.closed:
-		err = ErrShuttingDown
+		err = fmt.Errorf("shutting down")
 	}
 	return err
 }
@@ -477,11 +417,9 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 // peer. Sub-protocol independent fields are contained and initialized here, with
 // protocol specifics delegated to all connected sub-protocols.
 type PeerInfo struct {
-	ENR     string   `json:"enr,omitempty"` // Ethereum Node Record
-	Enode   string   `json:"enode"`         // Node URL
-	ID      string   `json:"id"`            // Unique node identifier
-	Name    string   `json:"name"`          // Name of the node, including client type, version, OS, custom data
-	Caps    []string `json:"caps"`          // Protocols advertised by this peer
+	ID      string   `json:"id"`   // Unique node identifier (also the encryption key)
+	Name    string   `json:"name"` // Name of the node, including client type, version, OS, custom data
+	Caps    []string `json:"caps"` // Sum-protocols advertised by this particular peer
 	Network struct {
 		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
 		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
@@ -501,14 +439,10 @@ func (p *Peer) Info() *PeerInfo {
 	}
 	// Assemble the generic peer metadata
 	info := &PeerInfo{
-		Enode:     p.Node().URLv4(),
 		ID:        p.ID().String(),
-		Name:      p.Fullname(),
+		Name:      p.Name(),
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
-	}
-	if p.Node().Seq() > 0 {
-		info.ENR = p.Node().String()
 	}
 	info.Network.LocalAddress = p.LocalAddr().String()
 	info.Network.RemoteAddress = p.RemoteAddr().String()

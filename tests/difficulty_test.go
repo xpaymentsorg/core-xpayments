@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -20,8 +17,9 @@
 package tests
 
 import (
-	"math/big"
 	"testing"
+
+	"math/big"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/params"
@@ -29,7 +27,7 @@ import (
 
 var (
 	mainnetChainConfig = params.ChainConfig{
-		ChainID:        big.NewInt(1),
+		ChainId:        big.NewInt(1),
 		HomesteadBlock: big.NewInt(1150000),
 		DAOForkBlock:   big.NewInt(1920000),
 		DAOForkSupport: true,
@@ -58,8 +56,8 @@ func TestDifficulty(t *testing.T) {
 	dt.skipLoad("difficultyMorden\\.json")
 	dt.skipLoad("difficultyOlimpic\\.json")
 
-	dt.config("Ropsten", *params.RopstenChainConfig)
-	dt.config("Morden", *params.RopstenChainConfig)
+	dt.config("Ropsten", *params.TestnetChainConfig)
+	dt.config("Morden", *params.TestnetChainConfig)
 	dt.config("Frontier", params.ChainConfig{})
 
 	dt.config("Homestead", params.ChainConfig{
@@ -70,24 +68,18 @@ func TestDifficulty(t *testing.T) {
 		ByzantiumBlock: big.NewInt(0),
 	})
 
-	dt.config("Frontier", *params.RopstenChainConfig)
+	dt.config("Frontier", *params.TestnetChainConfig)
 	dt.config("MainNetwork", mainnetChainConfig)
 	dt.config("CustomMainNetwork", mainnetChainConfig)
-	dt.config("Constantinople", params.ChainConfig{
-		ConstantinopleBlock: big.NewInt(0),
-	})
-	dt.config("EIP2384", params.ChainConfig{
-		MuirGlacierBlock: big.NewInt(0),
-	})
 	dt.config("difficulty.json", mainnetChainConfig)
 
 	dt.walk(t, difficultyTestDir, func(t *testing.T, name string, test *DifficultyTest) {
-		cfg := dt.findConfig(t)
+		cfg := dt.findConfig(name)
 		if test.ParentDifficulty.Cmp(params.MinimumDifficulty) < 0 {
 			t.Skip("difficulty below minimum")
 			return
 		}
-		if err := dt.checkFailure(t, test.Run(cfg)); err != nil {
+		if err := dt.checkFailure(t, name, test.Run(cfg)); err != nil {
 			t.Error(err)
 		}
 	})

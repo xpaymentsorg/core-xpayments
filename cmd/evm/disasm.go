@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -26,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/xpaymentsorg/go-xpayments/core/asm"
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 var disasmCommand = cli.Command{
@@ -37,22 +34,17 @@ var disasmCommand = cli.Command{
 }
 
 func disasmCmd(ctx *cli.Context) error {
-	var in string
-	switch {
-	case len(ctx.Args().First()) > 0:
-		fn := ctx.Args().First()
-		input, err := ioutil.ReadFile(fn)
-		if err != nil {
-			return err
-		}
-		in = string(input)
-	case ctx.GlobalIsSet(InputFlag.Name):
-		in = ctx.GlobalString(InputFlag.Name)
-	default:
-		return errors.New("missing filename or --input value")
+	if len(ctx.Args().First()) == 0 {
+		return errors.New("filename required")
 	}
 
-	code := strings.TrimSpace(in)
+	fn := ctx.Args().First()
+	in, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return err
+	}
+
+	code := strings.TrimSpace(string(in[:]))
 	fmt.Printf("%v\n", code)
 	return asm.PrintDisassembled(code)
 }

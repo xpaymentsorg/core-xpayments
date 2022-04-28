@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -61,9 +58,6 @@ type Event struct {
 
 	// Msg is set if the type is EventTypeMsg
 	Msg *Msg `json:"msg,omitempty"`
-
-	//Optionally provide data (currently for simulation frontends only)
-	Data interface{} `json:"data"`
 }
 
 // NewEvent creates a new event for the given object which should be either a
@@ -76,7 +70,8 @@ func NewEvent(v interface{}) *Event {
 	switch v := v.(type) {
 	case *Node:
 		event.Type = EventTypeNode
-		event.Node = v.copy()
+		node := *v
+		event.Node = &node
 	case *Conn:
 		event.Type = EventTypeConn
 		conn := *v
@@ -102,7 +97,7 @@ func ControlEvent(v interface{}) *Event {
 func (e *Event) String() string {
 	switch e.Type {
 	case EventTypeNode:
-		return fmt.Sprintf("<node-event> id: %s up: %t", e.Node.ID().TerminalString(), e.Node.Up())
+		return fmt.Sprintf("<node-event> id: %s up: %t", e.Node.ID().TerminalString(), e.Node.Up)
 	case EventTypeConn:
 		return fmt.Sprintf("<conn-event> nodes: %s->%s up: %t", e.Conn.One.TerminalString(), e.Conn.Other.TerminalString(), e.Conn.Up)
 	case EventTypeMsg:

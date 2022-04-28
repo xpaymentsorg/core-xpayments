@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -56,8 +53,7 @@ func makelist(g *core.Genesis) allocList {
 		if len(account.Storage) > 0 || len(account.Code) > 0 || account.Nonce != 0 {
 			panic(fmt.Sprintf("can't encode account %x", addr))
 		}
-		bigAddr := new(big.Int).SetBytes(addr.Bytes())
-		a = append(a, allocItem{bigAddr, account.Balance})
+		a = append(a, allocItem{addr.Big(), account.Balance})
 	}
 	sort.Sort(a)
 	return a

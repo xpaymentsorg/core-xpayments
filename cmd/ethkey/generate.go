@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -26,7 +23,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/google/uuid"
+	"github.com/pborman/uuid"
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
@@ -54,10 +51,6 @@ If you want to encrypt an existing private key, it can be specified by setting
 		cli.StringFlag{
 			Name:  "privatekey",
 			Usage: "file containing a raw private key to encrypt",
-		},
-		cli.BoolFlag{
-			Name:  "lightkdf",
-			Usage: "use less secure scrypt parameters",
 		},
 	},
 	Action: func(ctx *cli.Context) error {
@@ -89,23 +82,16 @@ If you want to encrypt an existing private key, it can be specified by setting
 		}
 
 		// Create the keyfile object with a random UUID.
-		UUID, err := uuid.NewRandom()
-		if err != nil {
-			utils.Fatalf("Failed to generate random uuid: %v", err)
-		}
+		id := uuid.NewRandom()
 		key := &keystore.Key{
-			Id:         UUID,
+			Id:         id,
 			Address:    crypto.PubkeyToAddress(privateKey.PublicKey),
 			PrivateKey: privateKey,
 		}
 
 		// Encrypt key with passphrase.
-		passphrase := getPassphrase(ctx, true)
-		scryptN, scryptP := keystore.StandardScryptN, keystore.StandardScryptP
-		if ctx.Bool("lightkdf") {
-			scryptN, scryptP = keystore.LightScryptN, keystore.LightScryptP
-		}
-		keyjson, err := keystore.EncryptKey(key, passphrase, scryptN, scryptP)
+		passphrase := getPassPhrase(ctx, true)
+		keyjson, err := keystore.EncryptKey(key, passphrase, keystore.StandardScryptN, keystore.StandardScryptP)
 		if err != nil {
 			utils.Fatalf("Error encrypting key: %v", err)
 		}

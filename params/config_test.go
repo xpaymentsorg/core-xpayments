@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -71,23 +68,6 @@ func TestCheckCompatible(t *testing.T) {
 				StoredConfig: big.NewInt(10),
 				NewConfig:    big.NewInt(20),
 				RewindTo:     9,
-			},
-		},
-		{
-			stored:  &ChainConfig{ConstantinopleBlock: big.NewInt(30)},
-			new:     &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(30)},
-			head:    40,
-			wantErr: nil,
-		},
-		{
-			stored: &ChainConfig{ConstantinopleBlock: big.NewInt(30)},
-			new:    &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(31)},
-			head:   40,
-			wantErr: &ConfigCompatError{
-				What:         "Petersburg fork block",
-				StoredConfig: nil,
-				NewConfig:    big.NewInt(31),
-				RewindTo:     30,
 			},
 		},
 	}

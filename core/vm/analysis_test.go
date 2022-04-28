@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -19,11 +16,7 @@
 
 package vm
 
-import (
-	"testing"
-
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-)
+import "testing"
 
 func TestJumpDestAnalysis(t *testing.T) {
 	tests := []struct {
@@ -50,59 +43,11 @@ func TestJumpDestAnalysis(t *testing.T) {
 		{[]byte{byte(PUSH32)}, 0xFF, 1},
 		{[]byte{byte(PUSH32)}, 0xFF, 2},
 	}
-	for i, test := range tests {
+	for _, test := range tests {
 		ret := codeBitmap(test.code)
 		if ret[test.which] != test.exp {
-			t.Fatalf("test %d: expected %x, got %02x", i, test.exp, ret[test.which])
+			t.Fatalf("expected %x, got %02x", test.exp, ret[test.which])
 		}
 	}
-}
 
-const analysisCodeSize = 1200 * 1024
-
-func BenchmarkJumpdestAnalysis_1200k(bench *testing.B) {
-	// 1.4 ms
-	code := make([]byte, analysisCodeSize)
-	bench.SetBytes(analysisCodeSize)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
-		codeBitmap(code)
-	}
-	bench.StopTimer()
-}
-func BenchmarkJumpdestHashing_1200k(bench *testing.B) {
-	// 4 ms
-	code := make([]byte, analysisCodeSize)
-	bench.SetBytes(analysisCodeSize)
-	bench.ResetTimer()
-	for i := 0; i < bench.N; i++ {
-		crypto.Keccak256Hash(code)
-	}
-	bench.StopTimer()
-}
-
-func BenchmarkJumpdestOpAnalysis(bench *testing.B) {
-	var op OpCode
-	bencher := func(b *testing.B) {
-		code := make([]byte, analysisCodeSize)
-		b.SetBytes(analysisCodeSize)
-		for i := range code {
-			code[i] = byte(op)
-		}
-		bits := make(bitvec, len(code)/8+1+4)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			for j := range bits {
-				bits[j] = 0
-			}
-			codeBitmapInternal(code, bits)
-		}
-	}
-	for op = PUSH1; op <= PUSH32; op++ {
-		bench.Run(op.String(), bencher)
-	}
-	op = JUMPDEST
-	bench.Run(op.String(), bencher)
-	op = STOP
-	bench.Run(op.String(), bencher)
 }

@@ -1,7 +1,4 @@
-// Copyright 2022 The go-xpayments Authors
-// This file is part of the go-xpayments library.
-//
-// Copyright 2022 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -25,7 +22,7 @@ import (
 )
 
 func lexAll(src string) []token {
-	ch := Lex([]byte(src), false)
+	ch := Lex("test.asm", []byte(src), false)
 
 	var tokens []token
 	for i := range ch {
@@ -62,18 +59,6 @@ func TestLexer(t *testing.T) {
 		{
 			input:  "0123abc",
 			tokens: []token{{typ: lineStart}, {typ: number, text: "0123"}, {typ: element, text: "abc"}, {typ: eof}},
-		},
-		{
-			input:  "00123abc",
-			tokens: []token{{typ: lineStart}, {typ: number, text: "00123"}, {typ: element, text: "abc"}, {typ: eof}},
-		},
-		{
-			input:  "@foo",
-			tokens: []token{{typ: lineStart}, {typ: label, text: "foo"}, {typ: eof}},
-		},
-		{
-			input:  "@label123",
-			tokens: []token{{typ: lineStart}, {typ: label, text: "label123"}, {typ: eof}},
 		},
 	}
 
