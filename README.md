@@ -1,7 +1,7 @@
 # Go xPayments
 Official Golang implementation of the xPayments protocol.
 
-It is a fork of Go Ethereum and Go Bor.<br>
+It is a fork of Go Ethereum.<br>
 Official Ethereum Repository: https://github.com/ethereum/go-ethereum<br>
 
 ![Forks](https://img.shields.io/github/forks/xpaymentsorg/go-xpayments?style=social)
