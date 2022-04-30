@@ -17,9 +17,6 @@
 package core
 
 import (
-	"runtime"
-	"sync"
-
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
 	"github.com/xpaymentsorg/go-xpayments/consensus/misc"
@@ -38,10 +35,6 @@ type StateProcessor struct {
 	config *params.ChainConfig // Chain configuration options
 	bc     *BlockChain         // Canonical block chain
 	engine consensus.Engine    // Consensus engine used for block rewards
-}
-type CalculatedBlock struct {
-	block *types.Block
-	stop  bool
 }
 
 // NewStateProcessor initialises a new StateProcessor.
@@ -68,17 +61,14 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs  []*types.Log
 		gp       = new(GasPool).AddGas(block.GasLimit())
 	)
-	// Mutate the the block and state according to any hard-fork specs
+	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	if common.TIPSigning.Cmp(header.Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
-	}
-	InitSignerInTransactions(p.config, header, block.Transactions())
+	// Iterate over and process the individual transactions
 	for i, tx := range block.Transactions() {
 		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
+		receipt, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
 		if err != nil {
 			return nil, nil, 0, err
 		}
@@ -86,49 +76,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
-	return receipts, allLogs, *usedGas, nil
-}
+	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles())
 
-func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
-	block := cBlock.block
-	var (
-		receipts types.Receipts
-		usedGas  = new(uint64)
-		header   = block.Header()
-		allLogs  []*types.Log
-		gp       = new(GasPool).AddGas(block.GasLimit())
-	)
-	// Mutate the the block and state according to any hard-fork specs
-	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb)
-	}
-	if common.TIPSigning.Cmp(header.Number) == 0 {
-		statedb.DeleteAddress(common.HexToAddress(common.BlockSigners))
-	}
-	if cBlock.stop {
-		return nil, nil, 0, ErrStopPreparingBlock
-	}
-	InitSignerInTransactions(p.config, header, block.Transactions())
-	if cBlock.stop {
-		return nil, nil, 0, ErrStopPreparingBlock
-	}
-	// Iterate over and process the individual transactions
-	receipts = make([]*types.Receipt, block.Transactions().Len())
-	for i, tx := range block.Transactions() {
-		statedb.Prepare(tx.Hash(), block.Hash(), i)
-		receipt, _, err := ApplyTransaction(p.config, p.bc, nil, gp, statedb, header, tx, usedGas, cfg)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		if cBlock.stop {
-			return nil, nil, 0, ErrStopPreparingBlock
-		}
-		receipts[i] = receipt
-		allLogs = append(allLogs, receipt.Logs...)
-	}
-	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 	return receipts, allLogs, *usedGas, nil
 }
 
@@ -136,13 +85,10 @@ func (p *StateProcessor) ProcessBlockNoValidator(cBlock *CalculatedBlock, stated
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, uint64, error) {
-	if tx.To() != nil && tx.To().String() == common.BlockSigners && config.IsTIPSigning(header.Number) {
-		return ApplySignTransaction(config, statedb, header, tx, usedGas)
-	}
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64, cfg vm.Config) (*types.Receipt, error) {
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, author)
@@ -150,9 +96,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, config, cfg)
 	// Apply the transaction to the current state (included in the env)
-	_, gas, failed, err := ApplyMessage(vmenv, msg, gp)
+	result, err := ApplyMessage(vmenv, msg, gp)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	// Update the state with pending changes
 	var root []byte
@@ -161,13 +107,13 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	} else {
 		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
 	}
-	*usedGas += gas
+	*usedGas += result.UsedGas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, failed, *usedGas)
+	// based on the eip phase, we're passing whether the root touch-delete accounts.
+	receipt := types.NewReceipt(root, result.Failed(), *usedGas)
 	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = gas
+	receipt.GasUsed = result.UsedGas
 	// if the transaction created a contract, store the creation address in the receipt.
 	if msg.To() == nil {
 		receipt.ContractAddress = crypto.CreateAddress(vmenv.Context.Origin, tx.Nonce())
@@ -175,67 +121,9 @@ func ApplyTransaction(config *params.ChainConfig, bc *BlockChain, author *common
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Logs = statedb.GetLogs(tx.Hash())
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
+	receipt.BlockHash = statedb.BlockHash()
+	receipt.BlockNumber = header.Number
+	receipt.TransactionIndex = uint(statedb.TxIndex())
 
-	return receipt, gas, err
-}
-
-func ApplySignTransaction(config *params.ChainConfig, statedb *state.StateDB, header *types.Header, tx *types.Transaction, usedGas *uint64) (*types.Receipt, uint64, error) {
-	// Update the state with pending changes
-	var root []byte
-	if config.IsByzantium(header.Number) {
-		statedb.Finalise(true)
-	} else {
-		root = statedb.IntermediateRoot(config.IsEIP158(header.Number)).Bytes()
-	}
-	from, err := types.Sender(types.MakeSigner(config, header.Number), tx)
-	if err != nil {
-		return nil, 0, err
-	}
-	nonce := statedb.GetNonce(from)
-	if nonce < tx.Nonce() {
-		return nil, 0, ErrNonceTooHigh
-	} else if nonce > tx.Nonce() {
-		return nil, 0, ErrNonceTooLow
-	}
-	statedb.SetNonce(from, nonce+1)
-	// Create a new receipt for the transaction, storing the intermediate root and gas used by the tx
-	// based on the eip phase, we're passing wether the root touch-delete accounts.
-	receipt := types.NewReceipt(root, false, *usedGas)
-	receipt.TxHash = tx.Hash()
-	receipt.GasUsed = 0
-	// if the transaction created a contract, store the creation address in the receipt.
-	// Set the receipt logs and create a bloom for filtering
-	log := &types.Log{}
-	log.Address = common.HexToAddress(common.BlockSigners)
-	log.BlockNumber = header.Number.Uint64()
-	statedb.AddLog(log)
-	receipt.Logs = statedb.GetLogs(tx.Hash())
-	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
-	return receipt, 0, nil
-}
-
-func InitSignerInTransactions(config *params.ChainConfig, header *types.Header, txs types.Transactions) {
-	nWorker := runtime.NumCPU()
-	signer := types.MakeSigner(config, header.Number)
-	chunkSize := txs.Len() / nWorker
-	if txs.Len()%nWorker != 0 {
-		chunkSize++
-	}
-	wg := sync.WaitGroup{}
-	wg.Add(nWorker)
-	for i := 0; i < nWorker; i++ {
-		from := i * chunkSize
-		to := from + chunkSize
-		if to > txs.Len() {
-			to = txs.Len()
-		}
-		go func(from int, to int) {
-			for j := from; j < to; j++ {
-				types.CacheSigner(signer, txs[j])
-				txs[j].CacheHash()
-			}
-			wg.Done()
-		}(from, to)
-	}
-	wg.Wait()
+	return receipt, err
 }

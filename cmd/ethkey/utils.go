@@ -23,41 +23,49 @@ import (
 	"strings"
 
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
-	"github.com/xpaymentsorg/go-xpayments/console"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"gopkg.in/urfave/cli.v1"
 )
 
-// getPassPhrase obtains a passphrase given by the user.  It first checks the
-// --passphrase command line flag and ultimately prompts the user for a
+// promptPassphrase prompts the user for a passphrase.  Set confirmation to true
+// to require the user to confirm the passphrase.
+func promptPassphrase(confirmation bool) string {
+	passphrase, err := prompt.Stdin.PromptPassword("Password: ")
+	if err != nil {
+		utils.Fatalf("Failed to read password: %v", err)
+	}
+
+	if confirmation {
+		confirm, err := prompt.Stdin.PromptPassword("Repeat password: ")
+		if err != nil {
+			utils.Fatalf("Failed to read password confirmation: %v", err)
+		}
+		if passphrase != confirm {
+			utils.Fatalf("Passwords do not match")
+		}
+	}
+
+	return passphrase
+}
+
+// getPassphrase obtains a passphrase given by the user.  It first checks the
+// --passfile command line flag and ultimately prompts the user for a
 // passphrase.
-func getPassPhrase(ctx *cli.Context, confirmation bool) string {
-	// Look for the --passphrase flag.
+func getPassphrase(ctx *cli.Context) string {
+	// Look for the --passwordfile flag.
 	passphraseFile := ctx.String(passphraseFlag.Name)
 	if passphraseFile != "" {
 		content, err := ioutil.ReadFile(passphraseFile)
 		if err != nil {
-			utils.Fatalf("Failed to read passphrase file '%s': %v",
+			utils.Fatalf("Failed to read password file '%s': %v",
 				passphraseFile, err)
 		}
 		return strings.TrimRight(string(content), "\r\n")
 	}
 
 	// Otherwise prompt the user for the passphrase.
-	passphrase, err := console.Stdin.PromptPassword("Passphrase: ")
-	if err != nil {
-		utils.Fatalf("Failed to read passphrase: %v", err)
-	}
-	if confirmation {
-		confirm, err := console.Stdin.PromptPassword("Repeat passphrase: ")
-		if err != nil {
-			utils.Fatalf("Failed to read passphrase confirmation: %v", err)
-		}
-		if passphrase != confirm {
-			utils.Fatalf("Passphrases do not match")
-		}
-	}
-	return passphrase
+	return promptPassphrase(false)
 }
 
 // signHash is a helper function that calculates a hash for the given message

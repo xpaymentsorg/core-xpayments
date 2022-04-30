@@ -92,7 +92,10 @@ func TestMailServer(t *testing.T) {
 	shh = whisper.New(&whisper.DefaultConfig)
 	shh.RegisterServer(&server)
 
-	server.Init(shh, dir, password, powRequirement)
+	err = server.Init(shh, dir, password, powRequirement)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer server.Close()
 
 	keyID, err = shh.AddSymKeyFromPassword(password)
@@ -169,7 +172,7 @@ func singleRequest(t *testing.T, server *WMailServer, env *whisper.Envelope, p *
 	}
 
 	src[0]++
-	ok, lower, upper, bloom = server.validateRequest(src, request)
+	ok, lower, upper, _ = server.validateRequest(src, request)
 	if !ok {
 		// request should be valid regardless of signature
 		t.Fatalf("request validation false negative, seed: %d (lower: %d, upper: %d).", seed, lower, upper)

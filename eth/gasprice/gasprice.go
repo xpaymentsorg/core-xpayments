@@ -29,7 +29,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
-var maxPrice = big.NewInt(500 * params.Shannon)
+var maxPrice = big.NewInt(500 * params.GWei)
 
 type Config struct {
 	Blocks     int
@@ -138,12 +138,6 @@ func (gpo *Oracle) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	}
 	if price.Cmp(maxPrice) > 0 {
 		price = new(big.Int).Set(maxPrice)
-	}
-
-	// Check gas price min.
-	minGasPrice := big.NewInt(common.MinGasPrice)
-	if price.Cmp(minGasPrice) < 0 {
-		price = new(big.Int).Set(minGasPrice)
 	}
 
 	gpo.cacheLock.Lock()

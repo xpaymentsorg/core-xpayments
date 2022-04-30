@@ -22,11 +22,11 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
 	"github.com/xpaymentsorg/go-xpayments/rlp"
-	set "gopkg.in/fatih/set.v0"
 )
 
 // Peer represents a whisper protocol peer connection.
@@ -41,9 +41,11 @@ type Peer struct {
 	bloomFilter    []byte
 	fullNode       bool
 
-	known *set.Set // Messages already known by the peer to avoid wasting bandwidth
+	known mapset.Set // Messages already known by the peer to avoid wasting bandwidth
 
 	quit chan struct{}
+
+	wg sync.WaitGroup
 }
 
 // newPeer creates a new whisper peer object, but does not run the handshake itself.
@@ -54,7 +56,7 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 		ws:             rw,
 		trusted:        false,
 		powRequirement: 0.0,
-		known:          set.New(),
+		known:          mapset.NewSet(),
 		quit:           make(chan struct{}),
 		bloomFilter:    MakeFullNodeBloom(),
 		fullNode:       true,
@@ -64,6 +66,7 @@ func newPeer(host *Whisper, remote *p2p.Peer, rw p2p.MsgReadWriter) *Peer {
 // start initiates the peer updater, periodically broadcasting the whisper packets
 // into the network.
 func (peer *Peer) start() {
+	peer.wg.Add(1)
 	go peer.update()
 	log.Trace("start", "peer", peer.ID())
 }
@@ -71,6 +74,7 @@ func (peer *Peer) start() {
 // stop terminates the peer updater, stopping message forwarding to it.
 func (peer *Peer) stop() {
 	close(peer.quit)
+	peer.wg.Wait()
 	log.Trace("stop", "peer", peer.ID())
 }
 
@@ -79,11 +83,16 @@ func (peer *Peer) stop() {
 func (peer *Peer) handshake() error {
 	// Send the handshake status message asynchronously
 	errc := make(chan error, 1)
+	isLightNode := peer.host.LightClientMode()
+	isRestrictedLightNodeConnection := peer.host.LightClientModeConnectionRestricted()
+	peer.wg.Add(1)
 	go func() {
+		defer peer.wg.Done()
 		pow := peer.host.MinPow()
 		powConverted := math.Float64bits(pow)
 		bloom := peer.host.BloomFilter()
-		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom)
+
+		errc <- p2p.SendItems(peer.ws, statusCode, ProtocolVersion, powConverted, bloom, isLightNode)
 	}()
 
 	// Fetch the remote status packet and verify protocol match
@@ -127,6 +136,11 @@ func (peer *Peer) handshake() error {
 		}
 	}
 
+	isRemotePeerLightNode, _ := s.Bool()
+	if isRemotePeerLightNode && isLightNode && isRestrictedLightNodeConnection {
+		return fmt.Errorf("peer [%x] is useless: two light client communication restricted", peer.ID())
+	}
+
 	if err := <-errc; err != nil {
 		return fmt.Errorf("peer [%x] failed to send status packet: %v", peer.ID(), err)
 	}
@@ -136,9 +150,12 @@ func (peer *Peer) handshake() error {
 // update executes periodic operations on the peer, including message transmission
 // and expiration.
 func (peer *Peer) update() {
+	defer peer.wg.Done()
 	// Start the tickers for the updates
 	expire := time.NewTicker(expirationCycle)
+	defer expire.Stop()
 	transmit := time.NewTicker(transmissionCycle)
+	defer transmit.Stop()
 
 	// Loop and transmit until termination is requested
 	for {
@@ -165,7 +182,7 @@ func (peer *Peer) mark(envelope *Envelope) {
 
 // marked checks if an envelope is already known to the remote peer.
 func (peer *Peer) marked(envelope *Envelope) bool {
-	return peer.known.Has(envelope.Hash())
+	return peer.known.Contains(envelope.Hash())
 }
 
 // expire iterates over all the known envelopes in the host and removes all

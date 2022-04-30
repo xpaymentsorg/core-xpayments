@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
@@ -35,7 +36,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/sync/syncmap"
-	set "gopkg.in/fatih/set.v0"
 )
 
 // Statistics holds several message-related counter for analytics
@@ -49,12 +49,14 @@ type Statistics struct {
 }
 
 const (
-	maxMsgSizeIdx           = iota // Maximal message length allowed by the whisper node
-	overflowIdx                    // Indicator of message queue overflow
-	minPowIdx                      // Minimal PoW required by the whisper node
-	minPowToleranceIdx             // Minimal PoW tolerated by the whisper node for a limited time
-	bloomFilterIdx                 // Bloom filter for topics of interest for this node
-	bloomFilterToleranceIdx        // Bloom filter tolerated by the whisper node for a limited time
+	maxMsgSizeIdx                            = iota // Maximal message length allowed by the whisper node
+	overflowIdx                                     // Indicator of message queue overflow
+	minPowIdx                                       // Minimal PoW required by the whisper node
+	minPowToleranceIdx                              // Minimal PoW tolerated by the whisper node for a limited time
+	bloomFilterIdx                                  // Bloom filter for topics of interest for this node
+	bloomFilterToleranceIdx                         // Bloom filter tolerated by the whisper node for a limited time
+	lightClientModeIdx                              // Light client mode. (does not forward any messages)
+	restrictConnectionBetweenLightClientsIdx        // Restrict connection between two light clients
 )
 
 // Whisper represents a dark communication interface through the Ethereum
@@ -69,7 +71,7 @@ type Whisper struct {
 
 	poolMu      sync.RWMutex              // Mutex to sync the message and expiration pools
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
-	expirations map[uint32]*set.SetNonTS  // Message expiration pool
+	expirations map[uint32]mapset.Set     // Message expiration pool
 
 	peerMu sync.RWMutex       // Mutex to sync the active peer set
 	peers  map[*Peer]struct{} // Set of currently active peers
@@ -82,12 +84,12 @@ type Whisper struct {
 
 	syncAllowance int // maximum time in seconds allowed to process the whisper-related messages
 
-	lightClient bool // indicates is this node is pure light client (does not forward any messages)
-
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
 	mailServer MailServer // MailServer interface
+
+	wg sync.WaitGroup
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -100,7 +102,7 @@ func New(cfg *Config) *Whisper {
 		privateKeys:   make(map[string]*ecdsa.PrivateKey),
 		symKeys:       make(map[string][]byte),
 		envelopes:     make(map[common.Hash]*Envelope),
-		expirations:   make(map[uint32]*set.SetNonTS),
+		expirations:   make(map[uint32]mapset.Set),
 		peers:         make(map[*Peer]struct{}),
 		messageQueue:  make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
@@ -113,6 +115,7 @@ func New(cfg *Config) *Whisper {
 	whisper.settings.Store(minPowIdx, cfg.MinimumAcceptedPOW)
 	whisper.settings.Store(maxMsgSizeIdx, cfg.MaxMessageSize)
 	whisper.settings.Store(overflowIdx, false)
+	whisper.settings.Store(restrictConnectionBetweenLightClientsIdx, cfg.RestrictConnectionBetweenLightClients)
 
 	// p2p whisper sub protocol handler
 	whisper.protocol = p2p.Protocol{
@@ -242,8 +245,10 @@ func (whisper *Whisper) SetBloomFilter(bloom []byte) error {
 	whisper.settings.Store(bloomFilterIdx, b)
 	whisper.notifyPeersAboutBloomFilterChange(b)
 
+	whisper.wg.Add(1)
 	go func() {
 		// allow some time before all the peers have processed the notification
+		defer whisper.wg.Done()
 		time.Sleep(time.Duration(whisper.syncAllowance) * time.Second)
 		whisper.settings.Store(bloomFilterToleranceIdx, b)
 	}()
@@ -260,7 +265,9 @@ func (whisper *Whisper) SetMinimumPoW(val float64) error {
 	whisper.settings.Store(minPowIdx, val)
 	whisper.notifyPeersAboutPowRequirementChange(val)
 
+	whisper.wg.Add(1)
 	go func() {
+		defer whisper.wg.Done()
 		// allow some time before all the peers have processed the notification
 		time.Sleep(time.Duration(whisper.syncAllowance) * time.Second)
 		whisper.settings.Store(minPowToleranceIdx, val)
@@ -274,6 +281,31 @@ func (whisper *Whisper) SetMinimumPowTest(val float64) {
 	whisper.settings.Store(minPowIdx, val)
 	whisper.notifyPeersAboutPowRequirementChange(val)
 	whisper.settings.Store(minPowToleranceIdx, val)
+}
+
+//SetLightClientMode makes node light client (does not forward any messages)
+func (whisper *Whisper) SetLightClientMode(v bool) {
+	whisper.settings.Store(lightClientModeIdx, v)
+}
+
+//LightClientMode indicates is this node is light client (does not forward any messages)
+func (whisper *Whisper) LightClientMode() bool {
+	val, exist := whisper.settings.Load(lightClientModeIdx)
+	if !exist || val == nil {
+		return false
+	}
+	v, ok := val.(bool)
+	return v && ok
+}
+
+//LightClientModeConnectionRestricted indicates that connection to light client in light client mode not allowed
+func (whisper *Whisper) LightClientModeConnectionRestricted() bool {
+	val, exist := whisper.settings.Load(restrictConnectionBetweenLightClientsIdx)
+	if !exist || val == nil {
+		return false
+	}
+	v, ok := val.(bool)
+	return v && ok
 }
 
 func (whisper *Whisper) notifyPeersAboutPowRequirementChange(pow float64) {
@@ -308,11 +340,11 @@ func (whisper *Whisper) getPeers() []*Peer {
 	arr := make([]*Peer, len(whisper.peers))
 	i := 0
 	whisper.peerMu.Lock()
+	defer whisper.peerMu.Unlock()
 	for p := range whisper.peers {
 		arr[i] = p
 		i++
 	}
-	whisper.peerMu.Unlock()
 	return arr
 }
 
@@ -326,7 +358,7 @@ func (whisper *Whisper) getPeer(peerID []byte) (*Peer, error) {
 			return p, nil
 		}
 	}
-	return nil, fmt.Errorf("Could not find peer with ID: %x", peerID)
+	return nil, fmt.Errorf("could not find peer with ID: %x", peerID)
 }
 
 // AllowP2PMessagesFromPeer marks specific peer trusted,
@@ -423,7 +455,7 @@ func (whisper *Whisper) AddKeyPair(key *ecdsa.PrivateKey) (string, error) {
 	return id, nil
 }
 
-// HasKeyPair checks if the the whisper node is configured with the private key
+// HasKeyPair checks if the whisper node is configured with the private key
 // of the specified public pair.
 func (whisper *Whisper) HasKeyPair(id string) bool {
 	whisper.keyMu.RLock()
@@ -600,10 +632,12 @@ func (whisper *Whisper) Send(envelope *Envelope) error {
 // of the Whisper protocol.
 func (whisper *Whisper) Start(*p2p.Server) error {
 	log.Info("started whisper v." + ProtocolVersionStr)
+	whisper.wg.Add(1)
 	go whisper.update()
 
 	numCPU := runtime.NumCPU()
 	for i := 0; i < numCPU; i++ {
+		whisper.wg.Add(1)
 		go whisper.processQueue()
 	}
 
@@ -614,6 +648,7 @@ func (whisper *Whisper) Start(*p2p.Server) error {
 // of the Whisper protocol.
 func (whisper *Whisper) Stop() error {
 	close(whisper.quit)
+	whisper.wg.Wait()
 	log.Info("whisper stopped")
 	return nil
 }
@@ -650,7 +685,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 		// fetch the next packet
 		packet, err := rw.ReadMsg()
 		if err != nil {
-			log.Warn("message loop", "peer", p.peer.ID(), "err", err)
+			log.Info("message loop", "peer", p.peer.ID(), "err", err)
 			return err
 		}
 		if packet.Size > whisper.MaxMessageSize() {
@@ -672,7 +707,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 
 			trouble := false
 			for _, env := range envelopes {
-				cached, err := whisper.add(env, whisper.lightClient)
+				cached, err := whisper.add(env, whisper.LightClientMode())
 				if err != nil {
 					trouble = true
 					log.Error("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
@@ -796,9 +831,9 @@ func (whisper *Whisper) add(envelope *Envelope, isP2P bool) (bool, error) {
 	if !alreadyCached {
 		whisper.envelopes[hash] = envelope
 		if whisper.expirations[envelope.Expiry] == nil {
-			whisper.expirations[envelope.Expiry] = set.NewNonTS()
+			whisper.expirations[envelope.Expiry] = mapset.NewThreadUnsafeSet()
 		}
-		if !whisper.expirations[envelope.Expiry].Has(hash) {
+		if !whisper.expirations[envelope.Expiry].Contains(hash) {
 			whisper.expirations[envelope.Expiry].Add(hash)
 		}
 	}
@@ -848,6 +883,7 @@ func (whisper *Whisper) checkOverflow() {
 
 // processQueue delivers the messages to the watchers during the lifetime of the whisper node.
 func (whisper *Whisper) processQueue() {
+	defer whisper.wg.Done()
 	var e *Envelope
 	for {
 		select {
@@ -866,8 +902,10 @@ func (whisper *Whisper) processQueue() {
 // update loops until the lifetime of the whisper node, updating its internal
 // state by expiring stale messages from the pool.
 func (whisper *Whisper) update() {
+	defer whisper.wg.Done()
 	// Start a ticker to check for expirations
 	expire := time.NewTicker(expirationCycle)
+	defer expire.Stop()
 
 	// Repeat updates until termination is requested
 	for {
@@ -900,7 +938,7 @@ func (whisper *Whisper) expire() {
 				whisper.stats.messagesCleared++
 				whisper.stats.memoryCleared += sz
 				whisper.stats.memoryUsed -= sz
-				return true
+				return false
 			})
 			whisper.expirations[expiry].Clear()
 			delete(whisper.expirations, expiry)
