@@ -19,10 +19,10 @@ package core
 import (
 	"math/big"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // ChainContext supports retrieving headers and consensus parameters from the
@@ -35,26 +35,45 @@ type ChainContext interface {
 	GetHeader(common.Hash, uint64) *types.Header
 }
 
-// NewEVMContext creates a new context for use in the EVM.
-func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author *common.Address) vm.Context {
+// NewEVMBlockContext creates a new context for use in the EVM.
+func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common.Address) vm.BlockContext {
+	var (
+		beneficiary common.Address
+		baseFee     *big.Int
+		random      *common.Hash
+	)
+
 	// If we don't have an explicit author (i.e. not mining), extract from the header
-	var beneficiary common.Address
 	if author == nil {
 		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
 	} else {
 		beneficiary = *author
 	}
-	return vm.Context{
+	if header.BaseFee != nil {
+		baseFee = new(big.Int).Set(header.BaseFee)
+	}
+	if header.Difficulty.Cmp(common.Big0) == 0 {
+		random = &header.MixDigest
+	}
+	return vm.BlockContext{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
-		Origin:      msg.From(),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).SetUint64(header.Time),
 		Difficulty:  new(big.Int).Set(header.Difficulty),
+		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
-		GasPrice:    new(big.Int).Set(msg.GasPrice()),
+		Random:      random,
+	}
+}
+
+// NewEVMTxContext creates a new transaction context for a single transaction.
+func NewEVMTxContext(msg Message) vm.TxContext {
+	return vm.TxContext{
+		Origin:   msg.From(),
+		GasPrice: new(big.Int).Set(msg.GasPrice()),
 	}
 }
 

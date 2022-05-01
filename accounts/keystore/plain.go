@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type keyStorePlain struct {

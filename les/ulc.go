@@ -19,8 +19,8 @@ package les
 import (
 	"errors"
 
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 type ulc struct {

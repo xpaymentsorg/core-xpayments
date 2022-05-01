@@ -21,8 +21,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
-	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -51,7 +51,7 @@ Change the password of a keyfile.`,
 		}
 
 		// Decrypt key with passphrase.
-		passphrase := getPassphrase(ctx)
+		passphrase := getPassphrase(ctx, false)
 		key, err := keystore.DecryptKey(keyjson, passphrase)
 		if err != nil {
 			utils.Fatalf("Error decrypting key: %v", err)
@@ -67,7 +67,7 @@ Change the password of a keyfile.`,
 			}
 			newPhrase = strings.TrimRight(string(content), "\r\n")
 		} else {
-			newPhrase = promptPassphrase(true)
+			newPhrase = utils.GetPassPhrase("", true)
 		}
 
 		// Encrypt the key with the new passphrase.

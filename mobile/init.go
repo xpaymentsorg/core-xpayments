@@ -22,7 +22,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 func init() {

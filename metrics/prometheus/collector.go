@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xpaymentsorg/go-xpayments/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (

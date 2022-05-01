@@ -33,14 +33,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	pcsc "github.com/gballet/go-libpcsclite"
 	"github.com/status-im/keycard-go/derivationpath"
-	ethereum "github.com/xpaymentsorg/go-xpayments"
-	"github.com/xpaymentsorg/go-xpayments/accounts"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/log"
 )
 
 // ErrPairingPasswordNeeded is returned if opening the smart card requires pairing with a pairing
@@ -637,8 +637,8 @@ func (w *Wallet) Derive(path accounts.DerivationPath, pin bool) (accounts.Accoun
 // to discover non zero accounts and automatically add them to list of tracked
 // accounts.
 //
-// Note, self derivaton will increment the last component of the specified path
-// opposed to decending into a child path to allow discovering accounts starting
+// Note, self derivation will increment the last component of the specified path
+// opposed to descending into a child path to allow discovering accounts starting
 // from non zero components.
 //
 // Some hardware wallets switched derivation paths through their evolution, so
@@ -699,7 +699,7 @@ func (w *Wallet) signHash(account accounts.Account, hash []byte) ([]byte, error)
 // the needed details via SignTxWithPassphrase, or by other means (e.g. unlock
 // the account in a keystore).
 func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID *big.Int) (*types.Transaction, error) {
-	signer := types.NewEIP155Signer(chainID)
+	signer := types.LatestSignerForChainID(chainID)
 	hash := signer.Hash(tx)
 	sig, err := w.signHash(account, hash[:])
 	if err != nil {

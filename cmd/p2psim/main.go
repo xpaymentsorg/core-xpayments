@@ -45,12 +45,12 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/p2p/simulations"
-	"github.com/xpaymentsorg/go-xpayments/p2p/simulations/adapters"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -289,7 +289,7 @@ func createNode(ctx *cli.Context) error {
 		config.PrivateKey = privKey
 	}
 	if services := ctx.String("services"); services != "" {
-		config.Services = strings.Split(services, ",")
+		config.Lifecycles = strings.Split(services, ",")
 	}
 	node, err := client.CreateNode(config)
 	if err != nil {

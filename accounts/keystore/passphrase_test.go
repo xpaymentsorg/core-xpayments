@@ -20,7 +20,7 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (

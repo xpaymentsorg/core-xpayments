@@ -29,14 +29,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
-	"github.com/xpaymentsorg/go-xpayments/event"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/node"
-	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/p2p/simulations/adapters"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
 func TestMain(m *testing.M) {
@@ -64,12 +64,15 @@ type testService struct {
 	state atomic.Value
 }
 
-func newTestService(ctx *adapters.ServiceContext) (node.Service, error) {
+func newTestService(ctx *adapters.ServiceContext, stack *node.Node) (node.Lifecycle, error) {
 	svc := &testService{
 		id:    ctx.Config.ID,
 		peers: make(map[enode.ID]*testPeer),
 	}
 	svc.state.Store(ctx.Snapshot)
+
+	stack.RegisterProtocols(svc.Protocols())
+	stack.RegisterAPIs(svc.APIs())
 	return svc, nil
 }
 
@@ -126,7 +129,7 @@ func (t *testService) APIs() []rpc.API {
 	}}
 }
 
-func (t *testService) Start(server *p2p.Server) error {
+func (t *testService) Start() error {
 	return nil
 }
 
@@ -138,7 +141,7 @@ func (t *testService) Stop() error {
 // message with the given code
 func (t *testService) handshake(rw p2p.MsgReadWriter, code uint64) error {
 	errc := make(chan error, 2)
-	go func() { errc <- p2p.Send(rw, code, struct{}{}) }()
+	go func() { errc <- p2p.SendItems(rw, code) }()
 	go func() { errc <- p2p.ExpectMsg(rw, code, struct{}{}) }()
 	for i := 0; i < 2; i++ {
 		if err := <-errc; err != nil {
@@ -288,7 +291,7 @@ func (t *TestAPI) Events(ctx context.Context) (*rpc.Subscription, error) {
 	return rpcSub, nil
 }
 
-var testServices = adapters.Services{
+var testServices = adapters.LifecycleConstructors{
 	"test": newTestService,
 }
 

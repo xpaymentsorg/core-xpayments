@@ -26,18 +26,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/state"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/event"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
 )
 
 var (
@@ -59,6 +59,7 @@ type LightChain struct {
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
+	forker        *core.ForkChoice
 
 	bodyCache    *lru.Cache // Cache for the most recent block bodies
 	bodyRLPCache *lru.Cache // Cache for the most recent block bodies in RLP encoded format
@@ -92,6 +93,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		blockCache:    blockCache,
 		engine:        engine,
 	}
+	bc.forker = core.NewForkChoice(bc, nil)
 	var err error
 	bc.hc, err = core.NewHeaderChain(odr.Database(), config, bc.engine, bc.getProcInterrupt)
 	if err != nil {
@@ -112,7 +114,7 @@ func NewLightChain(odr OdrBackend, config *params.ChainConfig, engine consensus.
 		if header := bc.GetHeaderByHash(hash); header != nil {
 			log.Error("Found bad hash, rewinding chain", "number", header.Number, "hash", header.ParentHash)
 			bc.SetHead(header.Number.Uint64() - 1)
-			log.Error("Chain rewind was successful, resuming normal operation")
+			log.Info("Chain rewind was successful, resuming normal operation")
 		}
 	}
 	return bc, nil
@@ -155,7 +157,11 @@ func (lc *LightChain) loadLastState() error {
 		// Corrupt or empty database, init from scratch
 		lc.Reset()
 	} else {
-		if header := lc.GetHeaderByHash(head); header != nil {
+		header := lc.GetHeaderByHash(head)
+		if header == nil {
+			// Corrupt or empty database, init from scratch
+			lc.Reset()
+		} else {
 			lc.hc.SetCurrentHeader(header)
 		}
 	}
@@ -163,7 +169,6 @@ func (lc *LightChain) loadLastState() error {
 	header := lc.hc.CurrentHeader()
 	headerTd := lc.GetTd(header.Hash(), header.Number.Uint64())
 	log.Info("Loaded most recent local header", "number", header.Number, "hash", header.Hash(), "td", headerTd, "age", common.PrettyAge(time.Unix(int64(header.Time), 0)))
-
 	return nil
 }
 
@@ -366,6 +371,42 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 	}
 }
 
+func (lc *LightChain) InsertHeader(header *types.Header) error {
+	// Verify the header first before obtaining the lock
+	headers := []*types.Header{header}
+	if _, err := lc.hc.ValidateHeaderChain(headers, 100); err != nil {
+		return err
+	}
+	// Make sure only one thread manipulates the chain at once
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
+
+	lc.wg.Add(1)
+	defer lc.wg.Done()
+
+	_, err := lc.hc.WriteHeaders(headers)
+	log.Info("Inserted header", "number", header.Number, "hash", header.Hash())
+	return err
+}
+
+func (lc *LightChain) SetChainHead(header *types.Header) error {
+	lc.chainmu.Lock()
+	defer lc.chainmu.Unlock()
+
+	lc.wg.Add(1)
+	defer lc.wg.Done()
+
+	if err := lc.hc.Reorg([]*types.Header{header}); err != nil {
+		return err
+	}
+	// Emit events
+	block := types.NewBlockWithHeader(header)
+	lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
+	lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
+	log.Info("Set the chain head", "number", block.Number(), "hash", block.Hash())
+	return nil
+}
+
 // InsertHeaderChain attempts to insert the given header chain in to the local
 // chain, possibly creating a reorg. If an error is returned, it will return the
 // index number of the failing header as well an error describing what went wrong.
@@ -378,6 +419,9 @@ func (lc *LightChain) postChainEvents(events []interface{}) {
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
 func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+	if len(chain) == 0 {
+		return 0, nil
+	}
 	if atomic.LoadInt32(&lc.disableCheckFreq) == 1 {
 		checkFreq = 0
 	}
@@ -393,24 +437,24 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	lc.wg.Add(1)
 	defer lc.wg.Done()
 
-	var events []interface{}
-	whFunc := func(header *types.Header) error {
-		status, err := lc.hc.WriteHeader(header)
-
-		switch status {
-		case core.CanonStatTy:
-			log.Debug("Inserted new header", "number", header.Number, "hash", header.Hash())
-			events = append(events, core.ChainEvent{Block: types.NewBlockWithHeader(header), Hash: header.Hash()})
-
-		case core.SideStatTy:
-			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
-			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
-		}
-		return err
+	status, err := lc.hc.InsertHeaderChain(chain, start, lc.forker)
+	if err != nil || len(chain) == 0 {
+		return 0, err
 	}
-	i, err := lc.hc.InsertHeaderChain(chain, whFunc, start)
-	lc.postChainEvents(events)
-	return i, err
+
+	// Create chain event for the new head block of this insertion.
+	var (
+		lastHeader = chain[len(chain)-1]
+		block      = types.NewBlockWithHeader(lastHeader)
+	)
+	switch status {
+	case core.CanonStatTy:
+		lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
+		lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
+	case core.SideStatTy:
+		lc.chainSideFeed.Send(core.ChainSideEvent{Block: block})
+	}
+	return 0, err
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
@@ -425,10 +469,15 @@ func (lc *LightChain) GetTd(hash common.Hash, number uint64) *big.Int {
 	return lc.hc.GetTd(hash, number)
 }
 
-// GetTdByHash retrieves a block's total difficulty in the canonical chain from the
-// database by hash, caching it if found.
-func (lc *LightChain) GetTdByHash(hash common.Hash) *big.Int {
-	return lc.hc.GetTdByHash(hash)
+// GetHeaderByNumberOdr retrieves the total difficult from the database or
+// network by hash and number, caching it (associated with its hash) if found.
+func (lc *LightChain) GetTdOdr(ctx context.Context, hash common.Hash, number uint64) *big.Int {
+	td := lc.GetTd(hash, number)
+	if td != nil {
+		return td
+	}
+	td, _ = GetTd(ctx, lc.odr, hash, number)
+	return td
 }
 
 // GetHeader retrieves a block header from the database by hash and number,
@@ -452,12 +501,6 @@ func (lc *LightChain) HasHeader(hash common.Hash, number uint64) bool {
 // GetCanonicalHash returns the canonical hash for a given block number
 func (bc *LightChain) GetCanonicalHash(number uint64) common.Hash {
 	return bc.hc.GetCanonicalHash(number)
-}
-
-// GetBlockHashesFromHash retrieves a number of block hashes starting at a given
-// hash, fetching towards the genesis block.
-func (lc *LightChain) GetBlockHashesFromHash(hash common.Hash, max uint64) []common.Hash {
-	return lc.hc.GetBlockHashesFromHash(hash, max)
 }
 
 // GetAncestor retrieves the Nth ancestor of a given block. It assumes that either the given block or

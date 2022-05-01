@@ -19,8 +19,8 @@ package les
 import (
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/common/bitutil"
-	"github.com/xpaymentsorg/go-xpayments/light"
+	"github.com/ethereum/go-ethereum/common/bitutil"
+	"github.com/ethereum/go-ethereum/light"
 )
 
 const (

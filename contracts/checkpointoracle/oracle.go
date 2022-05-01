@@ -23,10 +23,10 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/xpaymentsorg/go-xpayments/accounts/abi/bind"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/contracts/checkpointoracle/contract"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/checkpointoracle/contract"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // CheckpointOracle is a Go wrapper around an on-chain checkpoint oracle contract.
@@ -65,7 +65,7 @@ func (oracle *CheckpointOracle) LookupCheckpointEvents(blockLogs [][]*types.Log,
 			if err != nil {
 				continue
 			}
-			if event.Index == section && common.Hash(event.CheckpointHash) == hash {
+			if event.Index == section && event.CheckpointHash == hash {
 				votes = append(votes, event)
 			}
 		}

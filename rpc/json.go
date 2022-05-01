@@ -198,19 +198,31 @@ func NewCodec(conn Conn) ServerCodec {
 	return NewFuncCodec(conn, enc.Encode, dec.Decode)
 }
 
+func (c *jsonCodec) peerInfo() PeerInfo {
+	// This returns "ipc" because all other built-in transports have a separate codec type.
+	return PeerInfo{Transport: "ipc", RemoteAddr: c.remote}
+}
+
 func (c *jsonCodec) remoteAddr() string {
 	return c.remote
 }
 
-func (c *jsonCodec) readBatch() (msg []*jsonrpcMessage, batch bool, err error) {
+func (c *jsonCodec) readBatch() (messages []*jsonrpcMessage, batch bool, err error) {
 	// Decode the next JSON object in the input stream.
 	// This verifies basic syntax, etc.
 	var rawmsg json.RawMessage
 	if err := c.decode(&rawmsg); err != nil {
 		return nil, false, err
 	}
-	msg, batch = parseMessage(rawmsg)
-	return msg, batch, nil
+	messages, batch = parseMessage(rawmsg)
+	for i, msg := range messages {
+		if msg == nil {
+			// Message is JSON 'null'. Replace with zero value so it
+			// will be treated like any other invalid message.
+			messages[i] = new(jsonrpcMessage)
+		}
+	}
+	return messages, batch, nil
 }
 
 func (c *jsonCodec) writeJSON(ctx context.Context, v interface{}) error {

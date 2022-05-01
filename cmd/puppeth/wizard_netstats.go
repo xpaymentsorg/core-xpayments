@@ -23,9 +23,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/olekukonko/tablewriter"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/log"
 )
 
 // networkStats verifies the status of network components and generates a protip
@@ -140,14 +140,6 @@ func (w *wizard) gatherStats(server string, pubkey []byte, client *sshClient) *s
 		}
 	} else {
 		stat.services["explorer"] = infos.Report()
-	}
-	logger.Debug("Checking for wallet availability")
-	if infos, err := checkWallet(client, w.network); err != nil {
-		if err != ErrServiceUnknown {
-			stat.services["wallet"] = map[string]string{"offline": err.Error()}
-		}
-	} else {
-		stat.services["wallet"] = infos.Report()
 	}
 	logger.Debug("Checking for faucet availability")
 	if infos, err := checkFaucet(client, w.network); err != nil {

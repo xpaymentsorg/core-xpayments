@@ -20,10 +20,10 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // NodeSet stores a set of trie nodes. It implements trie.Database and can also

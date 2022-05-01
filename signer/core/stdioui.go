@@ -19,9 +19,9 @@ package core
 import (
 	"context"
 
-	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type StdIOUI struct {

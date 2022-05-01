@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !ios
-// +build !ios
+//go:build !ios && !js
+// +build !ios,!js
 
 package metrics
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/shirou/gopsutil/cpu"
-	"github.com/xpaymentsorg/go-xpayments/log"
 )
 
 // ReadCPUStats retrieves the current CPU stats.
@@ -30,6 +30,10 @@ func ReadCPUStats(stats *CPUStats) {
 	timeStats, err := cpu.Times(false)
 	if err != nil {
 		log.Error("Could not read cpu stats", "err", err)
+		return
+	}
+	if len(timeStats) == 0 {
+		log.Error("Empty cpu stats")
 		return
 	}
 	// requesting all cpu times will always return an array with only one time stats entry

@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/xpaymentsorg/go-xpayments/common/math"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/vm"
 )
 
 // Compiler contains information about the parsed source

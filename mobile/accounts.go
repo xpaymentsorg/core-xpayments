@@ -23,10 +23,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/accounts"
-	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (

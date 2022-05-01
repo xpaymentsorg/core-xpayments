@@ -23,11 +23,11 @@ import (
 	"strings"
 
 	"github.com/dop251/goja"
-	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/signer/core"
-	"github.com/xpaymentsorg/go-xpayments/signer/rules/deps"
-	"github.com/xpaymentsorg/go-xpayments/signer/storage"
+	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/internal/jsre/deps"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/signer/core"
+	"github.com/ethereum/go-ethereum/signer/storage"
 )
 
 var (

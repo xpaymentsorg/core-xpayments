@@ -24,18 +24,17 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/ethclient"
-	"github.com/xpaymentsorg/go-xpayments/ethstats"
-	"github.com/xpaymentsorg/go-xpayments/internal/debug"
-	"github.com/xpaymentsorg/go-xpayments/les"
-	"github.com/xpaymentsorg/go-xpayments/node"
-	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/nat"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	whisper "github.com/xpaymentsorg/go-xpayments/whisper/whisperv6"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/ethereum/go-ethereum/ethstats"
+	"github.com/ethereum/go-ethereum/internal/debug"
+	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // NodeConfig represents the collection of configuration values to fine tune the Geth
@@ -71,9 +70,6 @@ type NodeConfig struct {
 	// It has the form "nodename:secret@host:port"
 	EthereumNetStats string
 
-	// WhisperEnabled specifies whether the node should run the Whisper protocol.
-	WhisperEnabled bool
-
 	// Listening address of pprof server.
 	PprofAddress string
 }
@@ -92,6 +88,22 @@ var defaultNodeConfig = &NodeConfig{
 func NewNodeConfig() *NodeConfig {
 	config := *defaultNodeConfig
 	return &config
+}
+
+// AddBootstrapNode adds an additional bootstrap node to the node config.
+func (conf *NodeConfig) AddBootstrapNode(node *Enode) {
+	conf.BootstrapNodes.Append(node)
+}
+
+// EncodeJSON encodes a NodeConfig into a JSON data dump.
+func (conf *NodeConfig) EncodeJSON() (string, error) {
+	data, err := json.Marshal(conf)
+	return string(data), err
+}
+
+// String returns a printable representation of the node config.
+func (conf *NodeConfig) String() string {
+	return encodeOrError(conf)
 }
 
 // Node represents a Geth Ethereum node instance.
@@ -113,7 +125,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 
 	if config.PprofAddress != "" {
-		debug.StartPProf(config.PprofAddress)
+		debug.StartPProf(config.PprofAddress, true)
 	}
 
 	// Create the empty networking stack
@@ -153,6 +165,13 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 				config.EthereumNetworkID = 3
 			}
 		}
+		// If we have the Sepolia testnet, hard code the chain configs too
+		if config.EthereumGenesis == SepoliaGenesis() {
+			genesis.Config = params.SepoliaChainConfig
+			if config.EthereumNetworkID == 1 {
+				config.EthereumNetworkID = 11155111
+			}
+		}
 		// If we have the Rinkeby testnet, hard code the chain configs too
 		if config.EthereumGenesis == RinkebyGenesis() {
 			genesis.Config = params.RinkebyChainConfig
@@ -170,54 +189,35 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	}
 	// Register the Ethereum protocol if requested
 	if config.EthereumEnabled {
-		ethConf := eth.DefaultConfig
+		ethConf := ethconfig.Defaults
 		ethConf.Genesis = genesis
 		ethConf.SyncMode = downloader.LightSync
 		ethConf.NetworkId = uint64(config.EthereumNetworkID)
 		ethConf.DatabaseCache = config.EthereumDatabaseCache
-		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-			return les.New(ctx, &ethConf)
-		}); err != nil {
+		lesBackend, err := les.New(rawStack, &ethConf)
+		if err != nil {
 			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
-			if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
-				var lesServ *les.LightEthereum
-				ctx.Service(&lesServ)
-
-				return ethstats.New(config.EthereumNetStats, nil, lesServ)
-			}); err != nil {
+			if err := ethstats.New(rawStack, lesBackend.ApiBackend, lesBackend.Engine(), config.EthereumNetStats); err != nil {
 				return nil, fmt.Errorf("netstats init: %v", err)
 			}
-		}
-	}
-	// Register the Whisper protocol if requested
-	if config.WhisperEnabled {
-		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) {
-			return whisper.New(&whisper.DefaultConfig), nil
-		}); err != nil {
-			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
 	return &Node{rawStack}, nil
 }
 
-// Close terminates a running node along with all it's services, tearing internal
-// state doen too. It's not possible to restart a closed node.
+// Close terminates a running node along with all it's services, tearing internal state
+// down. It is not possible to restart a closed node.
 func (n *Node) Close() error {
 	return n.node.Close()
 }
 
 // Start creates a live P2P node and starts running it.
 func (n *Node) Start() error {
+	// TODO: recreate the node so it can be started multiple times
 	return n.node.Start()
-}
-
-// Stop terminates a running node along with all it's services. If the node was
-// not started, an error is returned.
-func (n *Node) Stop() error {
-	return n.node.Stop()
 }
 
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.

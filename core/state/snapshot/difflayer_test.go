@@ -22,9 +22,9 @@ import (
 	"testing"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 func copyDestructs(destructs map[common.Hash]struct{}) map[common.Hash]struct{} {
@@ -314,7 +314,7 @@ func BenchmarkSearchSlot(b *testing.B) {
 // With accountList and sorting
 // BenchmarkFlatten-6   	      50	  29890856 ns/op
 //
-// Without sorting and tracking accountlist
+// Without sorting and tracking accountList
 // BenchmarkFlatten-6   	     300	   5511511 ns/op
 func BenchmarkFlatten(b *testing.B) {
 	fill := func(parent snapshot) *diffLayer {
@@ -388,7 +388,7 @@ func BenchmarkJournal(b *testing.B) {
 		}
 		return newDiffLayer(parent, common.Hash{}, destructs, accounts, storage)
 	}
-	layer := snapshot(new(diskLayer))
+	layer := snapshot(emptyLayer())
 	for i := 1; i < 128; i++ {
 		layer = fill(layer)
 	}

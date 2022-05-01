@@ -19,10 +19,10 @@ package leveldb
 import (
 	"testing"
 
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/dbtest"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/dbtest"
 )
 
 func TestLevelDB(t *testing.T) {

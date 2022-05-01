@@ -21,17 +21,17 @@ import (
 	"sync"
 
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/ethdb"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
-	"github.com/xpaymentsorg/go-xpayments/trie"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.
 type diskLayer struct {
 	diskdb ethdb.KeyValueStore // Key-value store containing the base snapshot
-	triedb *trie.Database      // Trie node cache for reconstuction purposes
+	triedb *trie.Database      // Trie node cache for reconstruction purposes
 	cache  *fastcache.Cache    // Cache to avoid hitting the disk for direct access
 
 	root  common.Hash // Root hash of the base snapshot

@@ -22,9 +22,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/ethdb/memorydb"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
 func newEmptySecure() *SecureTrie {

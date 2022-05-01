@@ -19,16 +19,17 @@ package clique
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"math/big"
 	"sort"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/core/vm"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
-	"github.com/xpaymentsorg/go-xpayments/params"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // testerAccountPool is a pool to maintain currently active tester accounts,
@@ -363,7 +364,7 @@ func TestClique(t *testing.T) {
 			failure: errRecentlySigned,
 		}, {
 			// Recent signatures should not reset on checkpoint blocks imported in a new
-			// batch (https://github.com/xpaymentsorg/go-xpayments/issues/17593). Whilst this
+			// batch (https://github.com/ethereum/go-ethereum/issues/17593). Whilst this
 			// seems overly specific and weird, it was a Rinkeby consensus split.
 			epoch:   3,
 			signers: []string{"A", "B", "C"},
@@ -395,6 +396,7 @@ func TestClique(t *testing.T) {
 		// Create the genesis block with the initial set of signers
 		genesis := &core.Genesis{
 			ExtraData: make([]byte, extraVanity+common.AddressLength*len(signers)+extraSeal),
+			BaseFee:   big.NewInt(params.InitialBaseFee),
 		}
 		for j, signer := range signers {
 			copy(genesis.ExtraData[extraVanity+j*common.AddressLength:], signer[:])
@@ -423,7 +425,7 @@ func TestClique(t *testing.T) {
 		})
 		// Iterate through the blocks and seal them individually
 		for j, block := range blocks {
-			// Geth the header and prepare it for signing
+			// Get the header and prepare it for signing
 			header := block.Header()
 			if j > 0 {
 				header.ParentHash = blocks[j-1].Hash()

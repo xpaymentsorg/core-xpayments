@@ -19,7 +19,7 @@ package rpc
 import (
 	"fmt"
 
-	"github.com/xpaymentsorg/go-xpayments/metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 var (

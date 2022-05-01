@@ -19,9 +19,9 @@ package ethash
 import (
 	"errors"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var errEthashStopped = errors.New("ethash stopped")
@@ -89,7 +89,7 @@ func (api *API) SubmitWork(nonce types.BlockNonce, hash, digest common.Hash) boo
 //
 // It accepts the miner hash rate and an identifier which must be unique
 // between nodes.
-func (api *API) SubmitHashRate(rate hexutil.Uint64, id common.Hash) bool {
+func (api *API) SubmitHashrate(rate hexutil.Uint64, id common.Hash) bool {
 	if api.ethash.remote == nil {
 		return false
 	}

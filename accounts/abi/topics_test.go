@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestMakeTopics(t *testing.T) {

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/p2p/enr"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 )
 
 func TestReadNodes(t *testing.T) {
@@ -268,7 +268,7 @@ func (s *genIter) Node() *Node {
 }
 
 func (s *genIter) Close() {
-	s.index = ^uint32(0)
+	atomic.StoreUint32(&s.index, ^uint32(0))
 }
 
 func testNode(id, seq uint64) *Node {

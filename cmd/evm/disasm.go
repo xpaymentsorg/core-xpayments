@@ -22,8 +22,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/xpaymentsorg/go-xpayments/core/asm"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/core/asm"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var disasmCommand = cli.Command{
@@ -46,7 +46,7 @@ func disasmCmd(ctx *cli.Context) error {
 	case ctx.GlobalIsSet(InputFlag.Name):
 		in = ctx.GlobalString(InputFlag.Name)
 	default:
-		return errors.New("Missing filename or --input value")
+		return errors.New("missing filename or --input value")
 	}
 
 	code := strings.TrimSpace(in)

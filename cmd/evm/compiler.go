@@ -21,8 +21,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/xpaymentsorg/go-xpayments/cmd/evm/internal/compiler"
-	cli "gopkg.in/urfave/cli.v1"
+	"github.com/ethereum/go-ethereum/cmd/evm/internal/compiler"
+
+	"gopkg.in/urfave/cli.v1"
 )
 
 var compileCommand = cli.Command{

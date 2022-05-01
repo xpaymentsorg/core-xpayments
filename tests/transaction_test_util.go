@@ -19,12 +19,12 @@ package tests
 import (
 	"fmt"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
-	"github.com/xpaymentsorg/go-xpayments/core"
-	"github.com/xpaymentsorg/go-xpayments/core/types"
-	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // TransactionTest checks RLP decoding and sender derivation of transactions.
@@ -55,7 +55,7 @@ func (tt *TransactionTest) Run(config *params.ChainConfig) error {
 			return nil, nil, err
 		}
 		// Intrinsic gas
-		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.To() == nil, isHomestead, isIstanbul)
+		requiredGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.To() == nil, isHomestead, isIstanbul)
 		if err != nil {
 			return nil, nil, err
 		}

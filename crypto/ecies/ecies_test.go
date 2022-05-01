@@ -39,7 +39,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func TestKDF(t *testing.T) {
@@ -279,7 +279,7 @@ var testCases = []testCase{
 	{
 		Curve:    elliptic.P384(),
 		Name:     "P384",
-		Expected: ECIES_AES256_SHA384,
+		Expected: ECIES_AES192_SHA384,
 	},
 	{
 		Curve:    elliptic.P521(),

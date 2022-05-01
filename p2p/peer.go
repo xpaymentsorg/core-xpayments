@@ -25,13 +25,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/common/mclock"
-	"github.com/xpaymentsorg/go-xpayments/event"
-	"github.com/xpaymentsorg/go-xpayments/log"
-	"github.com/xpaymentsorg/go-xpayments/metrics"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enr"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/ethereum/go-ethereum/common/mclock"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 var (
@@ -115,17 +115,35 @@ type Peer struct {
 	disc     chan DiscReason
 
 	// events receives message send / receive events if set
-	events *event.Feed
+	events   *event.Feed
+	testPipe *MsgPipeRW // for testing
 }
 
 // NewPeer returns a peer for testing purposes.
 func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
+	// Generate a fake set of local protocols to match as running caps. Almost
+	// no fields needs to be meaningful here as we're only using it to cross-
+	// check with the "remote" caps array.
+	protos := make([]Protocol, len(caps))
+	for i, cap := range caps {
+		protos[i].Name = cap.Name
+		protos[i].Version = cap.Version
+	}
 	pipe, _ := net.Pipe()
 	node := enode.SignNull(new(enr.Record), id)
 	conn := &conn{fd: pipe, transport: nil, node: node, caps: caps, name: name}
-	peer := newPeer(log.Root(), conn, nil)
+	peer := newPeer(log.Root(), conn, protos)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
+}
+
+// NewPeerPipe creates a peer for testing purposes.
+// The message pipe given as the last parameter is closed when
+// Disconnect is called on the peer.
+func NewPeerPipe(id enode.ID, name string, caps []Cap, pipe *MsgPipeRW) *Peer {
+	p := NewPeer(id, name, caps)
+	p.testPipe = pipe
+	return p
 }
 
 // ID returns the node's public key.
@@ -138,8 +156,17 @@ func (p *Peer) Node() *enode.Node {
 	return p.rw.node
 }
 
-// Name returns the node name that the remote node advertised.
+// Name returns an abbreviated form of the name
 func (p *Peer) Name() string {
+	s := p.rw.name
+	if len(s) > 20 {
+		return s[:20] + "..."
+	}
+	return s
+}
+
+// Fullname returns the node name that the remote node advertised.
+func (p *Peer) Fullname() string {
 	return p.rw.name
 }
 
@@ -147,6 +174,20 @@ func (p *Peer) Name() string {
 func (p *Peer) Caps() []Cap {
 	// TODO: maybe return copy
 	return p.rw.caps
+}
+
+// RunningCap returns true if the peer is actively connected using any of the
+// enumerated versions of a specific protocol, meaning that at least one of the
+// versions is supported by both this node and the peer p.
+func (p *Peer) RunningCap(protocol string, versions []uint) bool {
+	if proto, ok := p.running[protocol]; ok {
+		for _, ver := range versions {
+			if proto.Version == ver {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // RemoteAddr returns the remote address of the network connection.
@@ -162,6 +203,10 @@ func (p *Peer) LocalAddr() net.Addr {
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
 func (p *Peer) Disconnect(reason DiscReason) {
+	if p.testPipe != nil {
+		p.testPipe.Close()
+	}
+
 	select {
 	case p.disc <- reason:
 	case <-p.closed:
@@ -287,11 +332,11 @@ func (p *Peer) handle(msg Msg) error {
 		msg.Discard()
 		go SendItems(p.rw, pongMsg)
 	case msg.Code == discMsg:
-		var reason [1]DiscReason
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
-		rlp.Decode(msg.Payload, &reason)
-		return reason[0]
+		var m struct{ R DiscReason }
+		rlp.Decode(msg.Payload, &m)
+		return m.R
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
 		return msg.Discard()
@@ -304,6 +349,7 @@ func (p *Peer) handle(msg Msg) error {
 		if metrics.Enabled {
 			m := fmt.Sprintf("%s/%s/%d/%#02x", ingressMeterName, proto.Name, proto.Version, msg.Code-proto.offset)
 			metrics.GetOrRegisterMeter(m, nil).Mark(int64(msg.meterSize))
+			metrics.GetOrRegisterMeter(m+"/packets", nil).Mark(1)
 		}
 		select {
 		case proto.in <- msg:
@@ -462,7 +508,7 @@ func (p *Peer) Info() *PeerInfo {
 	info := &PeerInfo{
 		Enode:     p.Node().URLv4(),
 		ID:        p.ID().String(),
-		Name:      p.Name(),
+		Name:      p.Fullname(),
 		Caps:      caps,
 		Protocols: make(map[string]interface{}),
 	}
