@@ -21,12 +21,12 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	cmath "github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	cmath "github.com/xpaymentsorg/go-xpayments/common/math"
+	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/params"
 )
 
 var emptyCodeHash = crypto.Keccak256Hash(nil)

@@ -31,13 +31,13 @@ import (
 	"syscall"
 
 	"github.com/dop251/goja"
-	"github.com/ethereum/go-ethereum/console/prompt"
-	"github.com/ethereum/go-ethereum/internal/jsre"
-	"github.com/ethereum/go-ethereum/internal/jsre/deps"
-	"github.com/ethereum/go-ethereum/internal/web3ext"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/internal/jsre"
+	"github.com/xpaymentsorg/go-xpayments/internal/jsre/deps"
+	"github.com/xpaymentsorg/go-xpayments/internal/web3ext"
+	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
 var (

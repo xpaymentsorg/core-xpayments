@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-ethereum commands.
+// Package utils contains internal helper functions for go-xpayments commands.
 package gpay_utils
 
 import (
@@ -25,7 +25,6 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"path/filepath"
 	godebug "runtime/debug"
 	"strconv"
 	"strings"
@@ -33,43 +32,43 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/keystore"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/fdlimit"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth"
-	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
-	"github.com/ethereum/go-ethereum/eth/downloader"
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
-	"github.com/ethereum/go-ethereum/eth/gasprice"
-	"github.com/ethereum/go-ethereum/eth/tracers"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/ethstats"
-	"github.com/ethereum/go-ethereum/graphql"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/internal/flags"
-	"github.com/ethereum/go-ethereum/les"
-	lescatalyst "github.com/ethereum/go-ethereum/les/catalyst"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/exp"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
-	"github.com/ethereum/go-ethereum/miner"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
-	"github.com/ethereum/go-ethereum/params"
 	pcsclite "github.com/gballet/go-libpcsclite"
 	gopsutil "github.com/shirou/gopsutil/mem"
+	"github.com/xpaymentsorg/go-xpayments/accounts"
+	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/common/fdlimit"
+	"github.com/xpaymentsorg/go-xpayments/consensus"
+	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
+	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
+	"github.com/xpaymentsorg/go-xpayments/core/vm"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/eth"
+	ethcatalyst "github.com/xpaymentsorg/go-xpayments/eth/catalyst"
+	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
+	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
+	"github.com/xpaymentsorg/go-xpayments/eth/gasprice"
+	"github.com/xpaymentsorg/go-xpayments/eth/tracers"
+	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/ethstats"
+	"github.com/xpaymentsorg/go-xpayments/graphql"
+	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
+	"github.com/xpaymentsorg/go-xpayments/internal/flags"
+	"github.com/xpaymentsorg/go-xpayments/les"
+	lescatalyst "github.com/xpaymentsorg/go-xpayments/les/catalyst"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/metrics"
+	"github.com/xpaymentsorg/go-xpayments/metrics/exp"
+	"github.com/xpaymentsorg/go-xpayments/metrics/influxdb"
+	"github.com/xpaymentsorg/go-xpayments/miner"
+	"github.com/xpaymentsorg/go-xpayments/node"
+	"github.com/xpaymentsorg/go-xpayments/p2p"
+	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/nat"
+	"github.com/xpaymentsorg/go-xpayments/p2p/netutil"
+	"github.com/xpaymentsorg/go-xpayments/params"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -138,33 +137,33 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Explicitly set network id (integer)(For testnets: use --ropsten, --rinkeby, --goerli instead)",
+		Usage: "Explicitly set network id (integer)(For testnets: use --beryllium instead)",
 		Value: ethconfig.Defaults.NetworkId,
 	}
 	MainnetFlag = cli.BoolFlag{
 		Name:  "mainnet",
-		Usage: "Ethereum mainnet",
+		Usage: "xPayments mainnet",
 	}
-	GoerliFlag = cli.BoolFlag{
-		Name:  "goerli",
-		Usage: "Görli network: pre-configured proof-of-authority test network",
-	}
-	RinkebyFlag = cli.BoolFlag{
-		Name:  "rinkeby",
-		Usage: "Rinkeby network: pre-configured proof-of-authority test network",
-	}
-	RopstenFlag = cli.BoolFlag{
-		Name:  "ropsten",
-		Usage: "Ropsten network: pre-configured proof-of-work test network",
-	}
-	SepoliaFlag = cli.BoolFlag{
-		Name:  "sepolia",
-		Usage: "Sepolia network: pre-configured proof-of-work test network",
-	}
-	KilnFlag = cli.BoolFlag{
-		Name:  "kiln",
-		Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
-	}
+	// GoerliFlag = cli.BoolFlag{
+	// 	Name:  "goerli",
+	// 	Usage: "Görli network: pre-configured proof-of-authority test network",
+	// }
+	// RinkebyFlag = cli.BoolFlag{
+	// 	Name:  "rinkeby",
+	// 	Usage: "Rinkeby network: pre-configured proof-of-authority test network",
+	// }
+	// RopstenFlag = cli.BoolFlag{
+	// 	Name:  "ropsten",
+	// 	Usage: "Ropsten network: pre-configured proof-of-work test network",
+	// }
+	// SepoliaFlag = cli.BoolFlag{
+	// 	Name:  "sepolia",
+	// 	Usage: "Sepolia network: pre-configured proof-of-work test network",
+	// }
+	// KilnFlag = cli.BoolFlag{
+	// 	Name:  "kiln",
+	// 	Usage: "Kiln network: pre-configured proof-of-work to proof-of-stake test network",
+	// }
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -829,23 +828,23 @@ var (
 // then a subdirectory of the specified datadir will be used.
 func MakeDataDir(ctx *cli.Context) string {
 	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
-		if ctx.GlobalBool(RopstenFlag.Name) {
-			// Maintain compatibility with older Geth configurations storing the
-			// Ropsten database in `testnet` instead of `ropsten`.
-			return filepath.Join(path, "ropsten")
-		}
-		if ctx.GlobalBool(RinkebyFlag.Name) {
-			return filepath.Join(path, "rinkeby")
-		}
-		if ctx.GlobalBool(GoerliFlag.Name) {
-			return filepath.Join(path, "goerli")
-		}
-		if ctx.GlobalBool(SepoliaFlag.Name) {
-			return filepath.Join(path, "sepolia")
-		}
-		if ctx.GlobalBool(KilnFlag.Name) {
-			return filepath.Join(path, "kiln")
-		}
+		// if ctx.GlobalBool(RopstenFlag.Name) {
+		// 	// Maintain compatibility with older Gpay configurations storing the
+		// 	// Ropsten database in `testnet` instead of `ropsten`.
+		// 	return filepath.Join(path, "ropsten")
+		// }
+		// if ctx.GlobalBool(RinkebyFlag.Name) {
+		// 	return filepath.Join(path, "rinkeby")
+		// }
+		// if ctx.GlobalBool(GoerliFlag.Name) {
+		// 	return filepath.Join(path, "goerli")
+		// }
+		// if ctx.GlobalBool(SepoliaFlag.Name) {
+		// 	return filepath.Join(path, "sepolia")
+		// }
+		// if ctx.GlobalBool(KilnFlag.Name) {
+		// 	return filepath.Join(path, "kiln")
+		// }
 		return path
 	}
 	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
@@ -892,16 +891,16 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 	switch {
 	case ctx.GlobalIsSet(BootnodesFlag.Name):
 		urls = SplitAndTrim(ctx.GlobalString(BootnodesFlag.Name))
-	case ctx.GlobalBool(RopstenFlag.Name):
-		urls = params.RopstenBootnodes
-	case ctx.GlobalBool(SepoliaFlag.Name):
-		urls = params.SepoliaBootnodes
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		urls = params.RinkebyBootnodes
-	case ctx.GlobalBool(GoerliFlag.Name):
-		urls = params.GoerliBootnodes
-	case ctx.GlobalBool(KilnFlag.Name):
-		urls = params.KilnBootnodes
+	// case ctx.GlobalBool(RopstenFlag.Name):
+	// 	urls = params.RopstenBootnodes
+	// case ctx.GlobalBool(SepoliaFlag.Name):
+	// 	urls = params.SepoliaBootnodes
+	// case ctx.GlobalBool(RinkebyFlag.Name):
+	// 	urls = params.RinkebyBootnodes
+	// case ctx.GlobalBool(GoerliFlag.Name):
+	// 	urls = params.GoerliBootnodes
+	// case ctx.GlobalBool(KilnFlag.Name):
+	// 	urls = params.KilnBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
 	}
@@ -1105,7 +1104,7 @@ func setLes(ctx *cli.Context, cfg *ethconfig.Config) {
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
-// for Geth and returns half of the allowance to assign to the database.
+// for Gpay and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles(max int) int {
 	limit, err := fdlimit.Maximum()
 	if err != nil {
@@ -1146,7 +1145,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `geth account list`)")
+	log.Warn("Please use explicit addresses! (can search via `gpay account list`)")
 	log.Warn("-------------------------------------------------------------------")
 
 	accs := ks.Accounts()
@@ -1334,26 +1333,26 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = ctx.GlobalString(DataDirFlag.Name)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		cfg.DataDir = "" // unless explicitly requested, use memory databases
-	case ctx.GlobalBool(RopstenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		// Maintain compatibility with older Geth configurations storing the
-		// Ropsten database in `testnet` instead of `ropsten`.
-		legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
-		if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
-			log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
-			cfg.DataDir = legacyPath
-		} else {
-			cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
-		}
+		// case ctx.GlobalBool(RopstenFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		// 	// Maintain compatibility with older Gpay configurations storing the
+		// 	// Ropsten database in `testnet` instead of `ropsten`.
+		// 	legacyPath := filepath.Join(node.DefaultDataDir(), "testnet")
+		// 	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
+		// 		log.Warn("Using the deprecated `testnet` datadir. Future versions will store the Ropsten chain in `ropsten`.")
+		// 		cfg.DataDir = legacyPath
+		// 	} else {
+		// 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
+		// 	}
 
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
-	case ctx.GlobalBool(RinkebyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
-	case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
-	case ctx.GlobalBool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
-	case ctx.GlobalBool(KilnFlag.Name) && cfg.DataDir == node.DefaultDataDir():
-		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "kiln")
+		// 	cfg.DataDir = filepath.Join(node.DefaultDataDir(), "ropsten")
+		// case ctx.GlobalBool(RinkebyFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		// 	cfg.DataDir = filepath.Join(node.DefaultDataDir(), "rinkeby")
+		// case ctx.GlobalBool(GoerliFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		// 	cfg.DataDir = filepath.Join(node.DefaultDataDir(), "goerli")
+		// case ctx.GlobalBool(SepoliaFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		// 	cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
+		// case ctx.GlobalBool(KilnFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		// 	cfg.DataDir = filepath.Join(node.DefaultDataDir(), "kiln")
 	}
 }
 
@@ -1546,7 +1545,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, KilnFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag) //, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, KilnFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1684,36 +1683,36 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		}
 		cfg.Genesis = core.DefaultGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, params.MainnetGenesisHash)
-	case ctx.GlobalBool(RopstenFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 3
-		}
-		cfg.Genesis = core.DefaultRopstenGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
-	case ctx.GlobalBool(SepoliaFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 11155111
-		}
-		cfg.Genesis = core.DefaultSepoliaGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 4
-		}
-		cfg.Genesis = core.DefaultRinkebyGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
-	case ctx.GlobalBool(GoerliFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 5
-		}
-		cfg.Genesis = core.DefaultGoerliGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
-	case ctx.GlobalBool(KilnFlag.Name):
-		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 1337802
-		}
-		cfg.Genesis = core.DefaultKilnGenesisBlock()
-		SetDNSDiscoveryDefaults(cfg, params.KilnGenesisHash)
+	// case ctx.GlobalBool(RopstenFlag.Name):
+	// 	if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+	// 		cfg.NetworkId = 3
+	// 	}
+	// 	cfg.Genesis = core.DefaultRopstenGenesisBlock()
+	// 	SetDNSDiscoveryDefaults(cfg, params.RopstenGenesisHash)
+	// case ctx.GlobalBool(SepoliaFlag.Name):
+	// 	if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+	// 		cfg.NetworkId = 11155111
+	// 	}
+	// 	cfg.Genesis = core.DefaultSepoliaGenesisBlock()
+	// 	SetDNSDiscoveryDefaults(cfg, params.SepoliaGenesisHash)
+	// case ctx.GlobalBool(RinkebyFlag.Name):
+	// 	if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+	// 		cfg.NetworkId = 4
+	// 	}
+	// 	cfg.Genesis = core.DefaultRinkebyGenesisBlock()
+	// 	SetDNSDiscoveryDefaults(cfg, params.RinkebyGenesisHash)
+	// case ctx.GlobalBool(GoerliFlag.Name):
+	// 	if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+	// 		cfg.NetworkId = 5
+	// 	}
+	// 	cfg.Genesis = core.DefaultGoerliGenesisBlock()
+	// 	SetDNSDiscoveryDefaults(cfg, params.GoerliGenesisHash)
+	// case ctx.GlobalBool(KilnFlag.Name):
+	// 	if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+	// 		cfg.NetworkId = 1337802
+	// 	}
+	// 	cfg.Genesis = core.DefaultKilnGenesisBlock()
+	// 	SetDNSDiscoveryDefaults(cfg, params.KilnGenesisHash)
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
 			cfg.NetworkId = 1337
@@ -1790,14 +1789,14 @@ func SetDNSDiscoveryDefaults(cfg *ethconfig.Config, genesis common.Hash) {
 	}
 }
 
-// RegisterEthService adds an Ethereum client to the stack.
+// RegisterEthService adds an xPayments client to the stack.
 // The second return value is the full node instance, which may be nil if the
 // node is running as a light client.
 func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend, *eth.Ethereum) {
 	if cfg.SyncMode == downloader.LightSync {
 		backend, err := les.New(stack, cfg)
 		if err != nil {
-			Fatalf("Failed to register the Ethereum service: %v", err)
+			Fatalf("Failed to register the xPayments service: %v", err)
 		}
 		stack.RegisterAPIs(tracers.APIs(backend.ApiBackend))
 		if backend.BlockChain().Config().TerminalTotalDifficulty != nil {
@@ -1809,7 +1808,7 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	}
 	backend, err := eth.New(stack, cfg)
 	if err != nil {
-		Fatalf("Failed to register the Ethereum service: %v", err)
+		Fatalf("Failed to register the xPayments service: %v", err)
 	}
 	if cfg.LightServ > 0 {
 		_, err := les.NewLesServer(stack, backend, cfg)
@@ -1826,11 +1825,11 @@ func RegisterEthService(stack *node.Node, cfg *ethconfig.Config) (ethapi.Backend
 	return backend.APIBackend, backend
 }
 
-// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
+// RegisterEthStatsService configures the xPayments Stats daemon and adds it to
 // the given node.
 func RegisterEthStatsService(stack *node.Node, backend ethapi.Backend, url string) {
 	if err := ethstats.New(stack, backend, backend.Engine(), url); err != nil {
-		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+		Fatalf("Failed to register the xPayments Stats service: %v", err)
 	}
 }
 
@@ -1883,13 +1882,13 @@ func SetupMetrics(ctx *cli.Context) {
 
 			log.Info("Enabling metrics export to InfluxDB")
 
-			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "geth.", tagsMap)
+			go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, database, username, password, "gpay.", tagsMap)
 		} else if enableExportV2 {
 			tagsMap := SplitTagsFlag(ctx.GlobalString(MetricsInfluxDBTagsFlag.Name))
 
 			log.Info("Enabling metrics export to InfluxDB (v2)")
 
-			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "geth.", tagsMap)
+			go influxdb.InfluxDBV2WithTags(metrics.DefaultRegistry, 10*time.Second, endpoint, token, bucket, organization, "gpay.", tagsMap)
 		}
 
 		if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
@@ -1944,16 +1943,16 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 	switch {
 	case ctx.GlobalBool(MainnetFlag.Name):
 		genesis = core.DefaultGenesisBlock()
-	case ctx.GlobalBool(RopstenFlag.Name):
-		genesis = core.DefaultRopstenGenesisBlock()
-	case ctx.GlobalBool(SepoliaFlag.Name):
-		genesis = core.DefaultSepoliaGenesisBlock()
-	case ctx.GlobalBool(RinkebyFlag.Name):
-		genesis = core.DefaultRinkebyGenesisBlock()
-	case ctx.GlobalBool(GoerliFlag.Name):
-		genesis = core.DefaultGoerliGenesisBlock()
-	case ctx.GlobalBool(KilnFlag.Name):
-		genesis = core.DefaultKilnGenesisBlock()
+	// case ctx.GlobalBool(RopstenFlag.Name):
+	// 	genesis = core.DefaultRopstenGenesisBlock()
+	// case ctx.GlobalBool(SepoliaFlag.Name):
+	// 	genesis = core.DefaultSepoliaGenesisBlock()
+	// case ctx.GlobalBool(RinkebyFlag.Name):
+	// 	genesis = core.DefaultRinkebyGenesisBlock()
+	// case ctx.GlobalBool(GoerliFlag.Name):
+	// 	genesis = core.DefaultGoerliGenesisBlock()
+	// case ctx.GlobalBool(KilnFlag.Name):
+	// 	genesis = core.DefaultKilnGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):
 		Fatalf("Developer chains are ephemeral")
 	}
@@ -2042,11 +2041,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 // This is a temporary function used for migrating old command/flags to the
 // new format.
 //
-// e.g. geth account new --keystore /tmp/mykeystore --lightkdf
+// e.g. gpay account new --keystore /tmp/mykeystore --lightkdf
 //
 // is equivalent after calling this method with:
 //
-// geth --keystore /tmp/mykeystore --lightkdf account new
+// gpay --keystore /tmp/mykeystore --lightkdf account new
 //
 // This allows the use of the existing configuration functionality.
 // When all flags are migrated this function can be removed and the existing

@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package utils contains internal helper functions for go-ethereum commands.
+// Package utils contains internal helper functions for go-xpayments commands.
 package gpay_utils
 
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual

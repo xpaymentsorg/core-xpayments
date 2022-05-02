@@ -23,17 +23,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/pruner"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	utils "github.com/xpaymentsorg/go-xpayments/cmd/gpay_utils"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
+	"github.com/xpaymentsorg/go-xpayments/core/state"
+	"github.com/xpaymentsorg/go-xpayments/core/state/pruner"
+	"github.com/xpaymentsorg/go-xpayments/core/state/snapshot"
+	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/trie"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -54,22 +54,22 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      "prune-state",
-				Usage:     "Prune stale ethereum state data based on the snapshot",
+				Usage:     "Prune stale xpayments state data based on the snapshot",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(pruneState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
 				Description: `
-geth snapshot prune-state <state-root>
+gpay snapshot prune-state <state-root>
 will prune historical state data with the help of the state snapshot.
 All trie nodes and contract codes that do not belong to the specified
 version state will be deleted from the database. After pruning, only
@@ -79,7 +79,7 @@ The default pruning target is the HEAD-127 state.
 
 WARNING: It's necessary to delete the trie clean cache after the pruning.
 If you specify another directory for the trie clean cache via "--cache.trie.journal"
-during the use of Geth, please also specify it here for correct deletion. Otherwise
+during the use of Gpay, please also specify it here for correct deletion. Otherwise
 the trie clean cache with default directory will be deleted.
 `,
 			},
@@ -92,13 +92,13 @@ the trie clean cache with default directory will be deleted.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 				},
 				Description: `
-geth snapshot verify-state <state-root>
+gpay snapshot verify-state <state-root>
 will traverse the whole accounts and storages set based on the specified
 snapshot and recalculate the root hash of state for verification.
 In other words, this command does the snapshot to trie conversion.
@@ -113,13 +113,13 @@ In other words, this command does the snapshot to trie conversion.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 				},
 				Description: `
-geth snapshot traverse-state <state-root>
+gpay snapshot traverse-state <state-root>
 will traverse the whole state from the given state root and will abort if any
 referenced trie node or contract code is missing. This command can be used for
 state integrity verification. The default checking target is the HEAD state.
@@ -136,13 +136,13 @@ It's also usable without snapshot enabled.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 				},
 				Description: `
-geth snapshot traverse-rawstate <state-root>
+gpay snapshot traverse-rawstate <state-root>
 will traverse the whole state from the given root and will abort if any referenced
 trie node or contract code is missing. This command can be used for state integrity
 verification. The default checking target is the HEAD state. It's basically identical
@@ -153,24 +153,24 @@ It's also usable without snapshot enabled.
 			},
 			{
 				Name:      "dump",
-				Usage:     "Dump a specific block from storage (same as 'geth dump' but using snapshots)",
+				Usage:     "Dump a specific block from storage (same as 'gpay dump' but using snapshots)",
 				ArgsUsage: "[? <blockHash> | <blockNum>]",
 				Action:    utils.MigrateFlags(dumpState),
 				Category:  "MISCELLANEOUS COMMANDS",
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,
 					utils.DumpLimitFlag,
 				},
 				Description: `
-This command is semantically equivalent to 'geth dump', but uses the snapshots
+This command is semantically equivalent to 'gpay dump', but uses the snapshots
 as the backend data source, making this command a lot faster. 
 
 The argument is interpreted as block number or hash. If none is provided, the latest

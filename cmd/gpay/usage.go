@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains the geth command usage template and generator.
+// Contains the gpay command usage template and generator.
 
 package main
 
@@ -22,16 +22,16 @@ import (
 	"io"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/internal/debug"
-	"github.com/ethereum/go-ethereum/internal/flags"
+	utils "github.com/xpaymentsorg/go-xpayments/cmd/gpay_utils"
+	"github.com/xpaymentsorg/go-xpayments/internal/debug"
+	"github.com/xpaymentsorg/go-xpayments/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flags.FlagGroup{
 	{
-		Name: "ETHEREUM",
+		Name: "XPAYMENTS",
 		Flags: []cli.Flag{
 			configFileFlag,
 			utils.DataDirFlag,
@@ -42,11 +42,11 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.SmartCardDaemonPathFlag,
 			utils.NetworkIdFlag,
 			utils.MainnetFlag,
-			utils.GoerliFlag,
-			utils.RinkebyFlag,
-			utils.RopstenFlag,
-			utils.SepoliaFlag,
-			utils.KilnFlag,
+			// utils.GoerliFlag,
+			// utils.RinkebyFlag,
+			// utils.RopstenFlag,
+			// utils.SepoliaFlag,
+			// utils.KilnFlag,
 			utils.SyncModeFlag,
 			utils.ExitWhenSyncedFlag,
 			utils.GCModeFlag,
@@ -79,19 +79,19 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.DeveloperGasLimitFlag,
 		},
 	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashCachesLockMmapFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
-			utils.EthashDatasetsLockMmapFlag,
-		},
-	},
+	// {
+	// 	Name: "ETHASH",
+	// 	Flags: []cli.Flag{
+	// 		utils.EthashCacheDirFlag,
+	// 		utils.EthashCachesInMemoryFlag,
+	// 		utils.EthashCachesOnDiskFlag,
+	// 		utils.EthashCachesLockMmapFlag,
+	// 		utils.EthashDatasetDirFlag,
+	// 		utils.EthashDatasetsInMemoryFlag,
+	// 		utils.EthashDatasetsOnDiskFlag,
+	// 		utils.EthashDatasetsLockMmapFlag,
+	// 	},
+	// },
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
@@ -117,7 +117,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.CacheTrieJournalFlag,
 			utils.CacheTrieRejournalFlag,
 			utils.CacheGCFlag,
-			utils.CacheSnapshotFlag,
+			// utils.CacheSnapshotFlag,
 			utils.CacheNoPrefetchFlag,
 			utils.CachePreimagesFlag,
 			utils.FDLimitFlag,
@@ -223,17 +223,17 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name:  "METRICS AND STATS",
 		Flags: metricsFlags,
 	},
-	{
-		Name: "ALIASED (deprecated)",
-		Flags: []cli.Flag{
-			utils.NoUSBFlag,
-			utils.LegacyWhitelistFlag,
-		},
-	},
+	// {
+	// 	Name: "ALIASED (deprecated)",
+	// 	Flags: []cli.Flag{
+	// 		utils.NoUSBFlag,
+	// 		utils.LegacyWhitelistFlag,
+	// 	},
+	// },
 	{
 		Name: "MISC",
 		Flags: []cli.Flag{
-			utils.SnapshotFlag,
+			// utils.SnapshotFlag,
 			utils.BloomFilterSizeFlag,
 			cli.HelpFlag,
 		},

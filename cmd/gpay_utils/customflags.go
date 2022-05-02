@@ -26,7 +26,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/xpaymentsorg/go-xpayments/common/math"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -45,7 +45,7 @@ func (s *DirectoryString) Set(value string) error {
 }
 
 // Custom cli.Flag type which expand the received string to an absolute path.
-// e.g. ~/.ethereum -> /home/username/.ethereum
+// e.g. ~/.xpayments -> /home/username/.xpayments
 type DirectoryFlag struct {
 	Name   string
 	Value  DirectoryString

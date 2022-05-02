@@ -19,7 +19,7 @@ package types
 import (
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/xpaymentsorg/go-xpayments/common"
 )
 
 type DynamicFeeTx struct {

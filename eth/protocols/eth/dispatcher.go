@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/xpaymentsorg/go-xpayments/p2p"
 )
 
 var (
