@@ -26,7 +26,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	utils "github.com/xpaymentsorg/go-xpayments/cmd/gpay_utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/core"
@@ -142,7 +142,7 @@ be gzipped.`,
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The import-preimages command imports hash preimages from an RLP encoded stream.
-It's deprecated, please use "geth db import" instead.
+It's deprecated, please use "gpay db import" instead.
 `,
 	}
 	exportPreimagesCommand = cli.Command{
@@ -158,7 +158,7 @@ It's deprecated, please use "geth db import" instead.
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `
 The export-preimages command exports hash preimages to an RLP encoded stream.
-It's deprecated, please use "geth db export" instead.
+It's deprecated, please use "gpay db export" instead.
 `,
 	}
 	dumpCommand = cli.Command{

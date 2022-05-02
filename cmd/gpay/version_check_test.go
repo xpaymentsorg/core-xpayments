@@ -93,7 +93,7 @@ func TestMatching(t *testing.T) {
 		t.Fatal(err)
 	}
 	check := func(version string) {
-		vFull := fmt.Sprintf("Geth/%v-unstable-15339cf1-20201204/linux-amd64/go1.15.4", version)
+		vFull := fmt.Sprintf("Gpay/%v-unstable-15339cf1-20201204/linux-amd64/go1.15.4", version)
 		for _, vuln := range vulns {
 			r, err := regexp.Compile(vuln.Check)
 			vulnIntro := versionUint(vuln.Introduced)
@@ -103,7 +103,7 @@ func TestMatching(t *testing.T) {
 				t.Fatal(err)
 			}
 			if vuln.Name == "Denial of service due to Go CVE-2020-28362" {
-				// this one is not tied to geth-versions
+				// this one is not tied to gpay-versions
 				continue
 			}
 			if vulnIntro <= current && vulnFixed > current {
@@ -131,8 +131,8 @@ func TestMatching(t *testing.T) {
 	}
 }
 
-func TestGethPubKeysParseable(t *testing.T) {
-	for _, pubkey := range gethPubKeys {
+func TestGpayPubKeysParseable(t *testing.T) {
+	for _, pubkey := range gpayPubKeys {
 		_, err := minisign.NewPublicKey(pubkey)
 		if err != nil {
 			t.Errorf("Should be parseable")
@@ -149,9 +149,9 @@ func TestKeyID(t *testing.T) {
 		args args
 		want string
 	}{
-		{"@holiman key", args{id: extractKeyId(gethPubKeys[0])}, "FB1D084D39BAEC24"},
-		{"second key", args{id: extractKeyId(gethPubKeys[1])}, "138B1CA303E51687"},
-		{"third key", args{id: extractKeyId(gethPubKeys[2])}, "FD9813B2D2098484"},
+		{"@holiman key", args{id: extractKeyId(gpayPubKeys[0])}, "FB1D084D39BAEC24"},
+		{"second key", args{id: extractKeyId(gpayPubKeys[1])}, "138B1CA303E51687"},
+		{"third key", args{id: extractKeyId(gpayPubKeys[2])}, "FD9813B2D2098484"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

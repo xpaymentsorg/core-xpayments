@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// Contains the geth command usage template and generator.
+// Contains the gpay command usage template and generator.
 
 package main
 
@@ -22,7 +22,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	utils "github.com/xpaymentsorg/go-xpayments/cmd/gpay_utils"
 	"github.com/xpaymentsorg/go-xpayments/internal/debug"
 	"github.com/xpaymentsorg/go-xpayments/internal/flags"
 	"gopkg.in/urfave/cli.v1"
@@ -31,7 +31,7 @@ import (
 // AppHelpFlagGroups is the application flags, grouped by functionality.
 var AppHelpFlagGroups = []flags.FlagGroup{
 	{
-		Name: "ETHEREUM",
+		Name: "XPAYMENTS",
 		Flags: []cli.Flag{
 			configFileFlag,
 			utils.DataDirFlag,
@@ -79,19 +79,19 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.DeveloperGasLimitFlag,
 		},
 	},
-	{
-		Name: "ETHASH",
-		Flags: []cli.Flag{
-			utils.EthashCacheDirFlag,
-			utils.EthashCachesInMemoryFlag,
-			utils.EthashCachesOnDiskFlag,
-			utils.EthashCachesLockMmapFlag,
-			utils.EthashDatasetDirFlag,
-			utils.EthashDatasetsInMemoryFlag,
-			utils.EthashDatasetsOnDiskFlag,
-			utils.EthashDatasetsLockMmapFlag,
-		},
-	},
+	// {
+	// 	Name: "ETHASH",
+	// 	Flags: []cli.Flag{
+	// 		utils.EthashCacheDirFlag,
+	// 		utils.EthashCachesInMemoryFlag,
+	// 		utils.EthashCachesOnDiskFlag,
+	// 		utils.EthashCachesLockMmapFlag,
+	// 		utils.EthashDatasetDirFlag,
+	// 		utils.EthashDatasetsInMemoryFlag,
+	// 		utils.EthashDatasetsOnDiskFlag,
+	// 		utils.EthashDatasetsLockMmapFlag,
+	// 	},
+	// },
 	{
 		Name: "TRANSACTION POOL",
 		Flags: []cli.Flag{
@@ -223,13 +223,13 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name:  "METRICS AND STATS",
 		Flags: metricsFlags,
 	},
-	{
-		Name: "ALIASED (deprecated)",
-		Flags: []cli.Flag{
-			utils.NoUSBFlag,
-			utils.LegacyWhitelistFlag,
-		},
-	},
+	// {
+	// 	Name: "ALIASED (deprecated)",
+	// 	Flags: []cli.Flag{
+	// 		utils.NoUSBFlag,
+	// 		utils.LegacyWhitelistFlag,
+	// 	},
+	// },
 	{
 		Name: "MISC",
 		Flags: []cli.Flag{

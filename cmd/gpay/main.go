@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
 
-// geth is the official command-line client for Ethereum.
+// gpay is the official command-line client for xPayments.
 package main
 
 import (
@@ -27,7 +27,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
-	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	utils "github.com/xpaymentsorg/go-xpayments/cmd/gpay_utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/eth"
@@ -48,7 +48,7 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "gpay" // Client identifier to advertise over the network
 )
 
 var (
@@ -56,7 +56,7 @@ var (
 	gitCommit = ""
 	gitDate   = ""
 	// The app that holds all commands and flags.
-	app = flags.NewApp(gitCommit, gitDate, "the go-ethereum command line interface")
+	app = flags.NewApp(gitCommit, gitDate, "the go-xpayments command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -73,14 +73,14 @@ var (
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideArrowGlacierFlag,
 		utils.OverrideTerminalTotalDifficulty,
-		utils.EthashCacheDirFlag,
-		utils.EthashCachesInMemoryFlag,
-		utils.EthashCachesOnDiskFlag,
-		utils.EthashCachesLockMmapFlag,
-		utils.EthashDatasetDirFlag,
-		utils.EthashDatasetsInMemoryFlag,
-		utils.EthashDatasetsOnDiskFlag,
-		utils.EthashDatasetsLockMmapFlag,
+		// utils.EthashCacheDirFlag,
+		// utils.EthashCachesInMemoryFlag,
+		// utils.EthashCachesOnDiskFlag,
+		// utils.EthashCachesLockMmapFlag,
+		// utils.EthashDatasetDirFlag,
+		// utils.EthashDatasetsInMemoryFlag,
+		// utils.EthashDatasetsOnDiskFlag,
+		// utils.EthashDatasetsLockMmapFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -211,10 +211,10 @@ var (
 )
 
 func init() {
-	// Initialize the CLI app and start Geth
-	app.Action = geth
+	// Initialize the CLI app and start Gpay
+	app.Action = gpay
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2022 The go-ethereum Authors"
+	app.Copyright = "Copyright 2013-2022 The go-xpayments Authors"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -233,8 +233,8 @@ func init() {
 		attachCommand,
 		javascriptCommand,
 		// See misccmd.go:
-		makecacheCommand,
-		makedagCommand,
+		// makecacheCommand,
+		// makedagCommand,
 		versionCommand,
 		versionCheckCommand,
 		licenseCommand,
@@ -243,7 +243,7 @@ func init() {
 		// see dbcmd.go
 		dbCommand,
 		// See cmd/utils/flags_legacy.go
-		utils.ShowDeprecated,
+		// utils.ShowDeprecated,
 		// See snapshot.go
 		snapshotCommand,
 	}
@@ -278,22 +278,22 @@ func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
 	// case ctx.GlobalIsSet(utils.RopstenFlag.Name):
-	// 	log.Info("Starting Geth on Ropsten testnet...")
+	// 	log.Info("Starting Gpay on Ropsten testnet...")
 
 	// case ctx.GlobalIsSet(utils.SepoliaFlag.Name):
-	// 	log.Info("Starting Geth on Sepolia testnet...")
+	// 	log.Info("Starting Gpay on Sepolia testnet...")
 
 	// case ctx.GlobalIsSet(utils.RinkebyFlag.Name):
-	// 	log.Info("Starting Geth on Rinkeby testnet...")
+	// 	log.Info("Starting Gpay on Rinkeby testnet...")
 
 	// case ctx.GlobalIsSet(utils.GoerliFlag.Name):
-	// 	log.Info("Starting Geth on Görli testnet...")
+	// 	log.Info("Starting Gpay on Görli testnet...")
 
 	// case ctx.GlobalIsSet(utils.DeveloperFlag.Name):
-	// 	log.Info("Starting Geth in ephemeral dev mode...")
+	// 	log.Info("Starting Gpay in ephemeral dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+		log.Info("Starting Gpay on xPayments mainnet...")
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
@@ -321,10 +321,10 @@ func prepare(ctx *cli.Context) {
 	go metrics.CollectProcessMetrics(3 * time.Second)
 }
 
-// geth is the main entry point into the system if no special subcommand is ran.
+// gpay is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func geth(ctx *cli.Context) error {
+func gpay(ctx *cli.Context) error {
 	if args := ctx.Args(); len(args) > 0 {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
@@ -354,7 +354,7 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 	events := make(chan accounts.WalletEvent, 16)
 	stack.AccountManager().Subscribe(events)
 
-	// Create a client to interact with local geth node.
+	// Create a client to interact with local gpay node.
 	rpcClient, err := stack.Attach()
 	if err != nil {
 		utils.Fatalf("Failed to attach to self: %v", err)
@@ -420,13 +420,13 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) || ctx.GlobalBool(utils.DeveloperFlag.Name) {
-		// Mining only makes sense if a full Ethereum node is running
+		// Mining only makes sense if a full xPayments node is running
 		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
 			utils.Fatalf("Light clients do not support mining")
 		}
 		ethBackend, ok := backend.(*eth.EthAPIBackend)
 		if !ok {
-			utils.Fatalf("Ethereum service not running")
+			utils.Fatalf("xPayments service not running")
 		}
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := utils.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)

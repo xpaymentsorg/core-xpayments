@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	utils "github.com/xpaymentsorg/go-xpayments/cmd/gpay_utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/console/prompt"

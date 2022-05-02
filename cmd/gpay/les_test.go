@@ -15,31 +15,31 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
-type gethrpc struct {
+type gpayrpc struct {
 	name     string
 	rpc      *rpc.Client
-	geth     *testgeth
+	gpay     *testgpay
 	nodeInfo *p2p.NodeInfo
 }
 
-func (g *gethrpc) killAndWait() {
-	g.geth.Kill()
-	g.geth.WaitExit()
+func (g *gpayrpc) killAndWait() {
+	g.gpay.Kill()
+	g.gpay.WaitExit()
 }
 
-func (g *gethrpc) callRPC(result interface{}, method string, args ...interface{}) {
+func (g *gpayrpc) callRPC(result interface{}, method string, args ...interface{}) {
 	if err := g.rpc.Call(&result, method, args...); err != nil {
-		g.geth.Fatalf("callRPC %v: %v", method, err)
+		g.gpay.Fatalf("callRPC %v: %v", method, err)
 	}
 }
 
-func (g *gethrpc) addPeer(peer *gethrpc) {
-	g.geth.Logf("%v.addPeer(%v)", g.name, peer.name)
+func (g *gpayrpc) addPeer(peer *gpayrpc) {
+	g.gpay.Logf("%v.addPeer(%v)", g.name, peer.name)
 	enode := peer.getNodeInfo().Enode
 	peerCh := make(chan *p2p.PeerEvent)
 	sub, err := g.rpc.Subscribe(context.Background(), "admin", peerCh, "peerEvents")
 	if err != nil {
-		g.geth.Fatalf("subscribe %v: %v", g.name, err)
+		g.gpay.Fatalf("subscribe %v: %v", g.name, err)
 	}
 	defer sub.Unsubscribe()
 	g.callRPC(nil, "admin_addPeer", enode)
@@ -47,16 +47,16 @@ func (g *gethrpc) addPeer(peer *gethrpc) {
 	timeout := time.After(dur)
 	select {
 	case ev := <-peerCh:
-		g.geth.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
+		g.gpay.Logf("%v received event: type=%v, peer=%v", g.name, ev.Type, ev.Peer)
 	case err := <-sub.Err():
-		g.geth.Fatalf("%v sub error: %v", g.name, err)
+		g.gpay.Fatalf("%v sub error: %v", g.name, err)
 	case <-timeout:
-		g.geth.Error("timeout adding peer after", dur)
+		g.gpay.Error("timeout adding peer after", dur)
 	}
 }
 
 // Use this function instead of `g.nodeInfo` directly
-func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
+func (g *gpayrpc) getNodeInfo() *p2p.NodeInfo {
 	if g.nodeInfo != nil {
 		return g.nodeInfo
 	}
@@ -65,13 +65,13 @@ func (g *gethrpc) getNodeInfo() *p2p.NodeInfo {
 	return g.nodeInfo
 }
 
-func (g *gethrpc) waitSynced() {
+func (g *gpayrpc) waitSynced() {
 	// Check if it's synced now
 	var result interface{}
 	g.callRPC(&result, "eth_syncing")
 	syncing, ok := result.(bool)
 	if ok && !syncing {
-		g.geth.Logf("%v already synced", g.name)
+		g.gpay.Logf("%v already synced", g.name)
 		return
 	}
 
@@ -79,23 +79,23 @@ func (g *gethrpc) waitSynced() {
 	ch := make(chan interface{})
 	sub, err := g.rpc.Subscribe(context.Background(), "eth", ch, "syncing")
 	if err != nil {
-		g.geth.Fatalf("%v syncing: %v", g.name, err)
+		g.gpay.Fatalf("%v syncing: %v", g.name, err)
 	}
 	defer sub.Unsubscribe()
 	timeout := time.After(4 * time.Second)
 	select {
 	case ev := <-ch:
-		g.geth.Log("'syncing' event", ev)
+		g.gpay.Log("'syncing' event", ev)
 		syncing, ok := ev.(bool)
 		if ok && !syncing {
 			break
 		}
-		g.geth.Log("Other 'syncing' event", ev)
+		g.gpay.Log("Other 'syncing' event", ev)
 	case err := <-sub.Err():
-		g.geth.Fatalf("%v notification: %v", g.name, err)
+		g.gpay.Fatalf("%v notification: %v", g.name, err)
 		break
 	case <-timeout:
-		g.geth.Fatalf("%v timeout syncing", g.name)
+		g.gpay.Fatalf("%v timeout syncing", g.name)
 		break
 	}
 }
@@ -128,17 +128,17 @@ func ipcEndpoint(ipcPath, datadir string) string {
 // the pipe filename instead of folder.
 var nextIPC = uint32(0)
 
-func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
-	ipcName := fmt.Sprintf("geth-%d.ipc", atomic.AddUint32(&nextIPC, 1))
+func startGpayWithIpc(t *testing.T, name string, args ...string) *gpayrpc {
+	ipcName := fmt.Sprintf("gpay-%d.ipc", atomic.AddUint32(&nextIPC, 1))
 	args = append([]string{"--networkid=42", "--port=0", "--ipcpath", ipcName}, args...)
 	t.Logf("Starting %v with rpc: %v", name, args)
 
-	g := &gethrpc{
+	g := &gpayrpc{
 		name: name,
-		geth: runGeth(t, args...),
+		gpay: runGpay(t, args...),
 	}
-	ipcpath := ipcEndpoint(ipcName, g.geth.Datadir)
-	// We can't know exactly how long geth will take to start, so we try 10
+	ipcpath := ipcEndpoint(ipcName, g.gpay.Datadir)
+	// We can't know exactly how long gpay will take to start, so we try 10
 	// times over a 5 second period.
 	var err error
 	for i := 0; i < 10; i++ {
@@ -151,27 +151,27 @@ func startGethWithIpc(t *testing.T, name string, args ...string) *gethrpc {
 	return nil
 }
 
-func initGeth(t *testing.T) string {
+func initGpay(t *testing.T) string {
 	args := []string{"--networkid=42", "init", "./testdata/clique.json"}
-	t.Logf("Initializing geth: %v ", args)
-	g := runGeth(t, args...)
+	t.Logf("Initializing gpay: %v ", args)
+	g := runGpay(t, args...)
 	datadir := g.Datadir
 	g.WaitExit()
 	return datadir
 }
 
-func startLightServer(t *testing.T) *gethrpc {
-	datadir := initGeth(t)
-	t.Logf("Importing keys to geth")
-	runGeth(t, "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv", "--lightkdf").WaitExit()
+func startLightServer(t *testing.T) *gpayrpc {
+	datadir := initGpay(t)
+	t.Logf("Importing keys to gpay")
+	runGpay(t, "--datadir", datadir, "--password", "./testdata/password.txt", "account", "import", "./testdata/key.prv", "--lightkdf").WaitExit()
 	account := "0x02f0d131f1f97aef08aec6e3291b957d9efe7105"
-	server := startGethWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1", "--verbosity=4")
+	server := startGpayWithIpc(t, "lightserver", "--allow-insecure-unlock", "--datadir", datadir, "--password", "./testdata/password.txt", "--unlock", account, "--mine", "--light.serve=100", "--light.maxpeers=1", "--nodiscover", "--nat=extip:127.0.0.1", "--verbosity=4")
 	return server
 }
 
-func startClient(t *testing.T, name string) *gethrpc {
-	datadir := initGeth(t)
-	return startGethWithIpc(t, name, "--datadir", datadir, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1", "--verbosity=4")
+func startClient(t *testing.T, name string) *gpayrpc {
+	datadir := initGpay(t)
+	return startGpayWithIpc(t, name, "--datadir", datadir, "--nodiscover", "--syncmode=light", "--nat=extip:127.0.0.1", "--verbosity=4")
 }
 
 func TestPriorityClient(t *testing.T) {
@@ -204,7 +204,7 @@ func TestPriorityClient(t *testing.T) {
 		t.Errorf("Expected: # of prio peers == 1, actual: %v", len(peers))
 	}
 
-	nodes := map[string]*gethrpc{
+	nodes := map[string]*gpayrpc{
 		lightServer.getNodeInfo().ID: lightServer,
 		freeCli.getNodeInfo().ID:     freeCli,
 		prioCli.getNodeInfo().ID:     prioCli,
