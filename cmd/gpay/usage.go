@@ -117,7 +117,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.CacheTrieJournalFlag,
 			utils.CacheTrieRejournalFlag,
 			utils.CacheGCFlag,
-			utils.CacheSnapshotFlag,
+			// utils.CacheSnapshotFlag,
 			utils.CacheNoPrefetchFlag,
 			utils.CachePreimagesFlag,
 			utils.FDLimitFlag,
@@ -233,7 +233,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 	{
 		Name: "MISC",
 		Flags: []cli.Flag{
-			utils.SnapshotFlag,
+			// utils.SnapshotFlag,
 			utils.BloomFilterSizeFlag,
 			cli.HelpFlag,
 		},
