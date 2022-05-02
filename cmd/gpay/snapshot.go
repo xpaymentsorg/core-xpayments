@@ -23,17 +23,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/state/pruner"
-	"github.com/ethereum/go-ethereum/core/state/snapshot"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
+	"github.com/xpaymentsorg/go-xpayments/common"
+	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
+	"github.com/xpaymentsorg/go-xpayments/core/state"
+	"github.com/xpaymentsorg/go-xpayments/core/state/pruner"
+	"github.com/xpaymentsorg/go-xpayments/core/state/snapshot"
+	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/log"
+	"github.com/xpaymentsorg/go-xpayments/rlp"
+	"github.com/xpaymentsorg/go-xpayments/trie"
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -61,10 +61,10 @@ var (
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 					utils.CacheTrieJournalFlag,
 					utils.BloomFilterSizeFlag,
 				},
@@ -92,10 +92,10 @@ the trie clean cache with default directory will be deleted.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot verify-state <state-root>
@@ -113,10 +113,10 @@ In other words, this command does the snapshot to trie conversion.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot traverse-state <state-root>
@@ -136,10 +136,10 @@ It's also usable without snapshot enabled.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 				},
 				Description: `
 geth snapshot traverse-rawstate <state-root>
@@ -160,10 +160,10 @@ It's also usable without snapshot enabled.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.AncientFlag,
-					utils.RopstenFlag,
-					utils.SepoliaFlag,
-					utils.RinkebyFlag,
-					utils.GoerliFlag,
+					// utils.RopstenFlag,
+					// utils.SepoliaFlag,
+					// utils.RinkebyFlag,
+					// utils.GoerliFlag,
 					utils.ExcludeCodeFlag,
 					utils.ExcludeStorageFlag,
 					utils.StartKeyFlag,

@@ -7,7 +7,7 @@ import (
 	"go/types"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/rlp/internal/rlpstruct"
+	"github.com/xpaymentsorg/go-xpayments/rlp/internal/rlpstruct"
 )
 
 // buildContext keeps the data needed for make*Op.

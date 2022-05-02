@@ -21,7 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/ethereum/go-ethereum/tests/fuzzers/les"
+	"github.com/xpaymentsorg/go-xpayments/tests/fuzzers/les"
 )
 
 func main() {

@@ -19,7 +19,7 @@ package gpay_utils
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"gopkg.in/urfave/cli.v1"
 )
 
