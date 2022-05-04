@@ -29,7 +29,7 @@ func TestSubCloseUnsub(t *testing.T) {
 	// the point of this test is **not** to panic
 	var mux TypeMux
 	mux.Stop()
-	sub := mux.Subscribe(0)
+	sub := mux.Subscribe(int(0))
 	sub.Unsubscribe()
 }
 
@@ -141,7 +141,7 @@ func TestMuxConcurrent(t *testing.T) {
 	}
 }
 
-func emptySubscriber(mux *TypeMux) {
+func emptySubscriber(mux *TypeMux, types ...interface{}) {
 	s := mux.Subscribe(testEvent(0))
 	go func() {
 		for range s.Chan() {
@@ -182,9 +182,9 @@ func BenchmarkPost1000(b *testing.B) {
 func BenchmarkPostConcurrent(b *testing.B) {
 	var mux = new(TypeMux)
 	defer mux.Stop()
-	emptySubscriber(mux)
-	emptySubscriber(mux)
-	emptySubscriber(mux)
+	emptySubscriber(mux, testEvent(0))
+	emptySubscriber(mux, testEvent(0))
+	emptySubscriber(mux, testEvent(0))
 
 	var wg sync.WaitGroup
 	poster := func() {
@@ -203,7 +203,6 @@ func BenchmarkPostConcurrent(b *testing.B) {
 // for comparison
 func BenchmarkChanSend(b *testing.B) {
 	c := make(chan interface{})
-	defer close(c)
 	closed := make(chan struct{})
 	go func() {
 		for range c {

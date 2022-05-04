@@ -19,7 +19,6 @@ package console
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -28,12 +27,9 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
-	"github.com/xpaymentsorg/go-xpayments/console/prompt"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
 	"github.com/xpaymentsorg/go-xpayments/internal/jsre"
-	"github.com/xpaymentsorg/go-xpayments/miner"
 	"github.com/xpaymentsorg/go-xpayments/node"
 )
 
@@ -69,10 +65,10 @@ func (p *hookedPrompter) PromptPassword(prompt string) (string, error) {
 func (p *hookedPrompter) PromptConfirm(prompt string) (bool, error) {
 	return false, errors.New("not implemented")
 }
-func (p *hookedPrompter) SetHistory(history []string)                     {}
-func (p *hookedPrompter) AppendHistory(command string)                    {}
-func (p *hookedPrompter) ClearHistory()                                   {}
-func (p *hookedPrompter) SetWordCompleter(completer prompt.WordCompleter) {}
+func (p *hookedPrompter) SetHistory(history []string)              {}
+func (p *hookedPrompter) AppendHistory(command string)             {}
+func (p *hookedPrompter) ClearHistory()                            {}
+func (p *hookedPrompter) SetWordCompleter(completer WordCompleter) {}
 
 // tester is a console test environment for the console tests to operate on.
 type tester struct {
@@ -86,7 +82,7 @@ type tester struct {
 
 // newTester creates a test environment based on which the console can operate.
 // Please ensure you call Close() on the returned tester to avoid leaks.
-func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
+func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	// Create a temporary storage for the node keys and initialize it
 	workspace, err := ioutil.TempDir("", "console-tester-")
 	if err != nil {
@@ -98,11 +94,9 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if err != nil {
 		t.Fatalf("failed to create node: %v", err)
 	}
-	ethConf := &ethconfig.Config{
-		Genesis: core.DeveloperGenesisBlock(15, 11_500_000, common.Address{}),
-		Miner: miner.Config{
-			Etherbase: common.HexToAddress(testAddress),
-		},
+	ethConf := &eth.Config{
+		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
+		Etherbase: common.HexToAddress(testAddress),
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeTest,
 		},
@@ -110,8 +104,7 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 	if confOverride != nil {
 		confOverride(ethConf)
 	}
-	ethBackend, err := eth.New(stack, ethConf)
-	if err != nil {
+	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
 	// Start the node and assemble the JavaScript console around it
@@ -137,10 +130,13 @@ func newTester(t *testing.T, confOverride func(*ethconfig.Config)) *tester {
 		t.Fatalf("failed to create JavaScript console: %v", err)
 	}
 	// Create the final tester and return
+	var ethereum *eth.Ethereum
+	stack.Service(&ethereum)
+
 	return &tester{
 		workspace: workspace,
 		stack:     stack,
-		ethereum:  ethBackend,
+		ethereum:  ethereum,
 		console:   console,
 		input:     prompter,
 		output:    printer,
@@ -152,37 +148,10 @@ func (env *tester) Close(t *testing.T) {
 	if err := env.console.Stop(false); err != nil {
 		t.Errorf("failed to stop embedded console: %v", err)
 	}
-	if err := env.stack.Close(); err != nil {
-		t.Errorf("failed to tear down embedded node: %v", err)
+	if err := env.stack.Stop(); err != nil {
+		t.Errorf("failed to stop embedded node: %v", err)
 	}
 	os.RemoveAll(env.workspace)
-}
-
-// Tests that the node lists the correct welcome message, notably that it contains
-// the instance name, coinbase account, block number, data directory and supported
-// console modules.
-func TestWelcome(t *testing.T) {
-	tester := newTester(t, nil)
-	defer tester.Close(t)
-
-	tester.console.Welcome()
-
-	output := tester.output.String()
-	if want := "Welcome"; !strings.Contains(output, want) {
-		t.Fatalf("console output missing welcome message: have\n%s\nwant also %s", output, want)
-	}
-	if want := fmt.Sprintf("instance: %s", testInstance); !strings.Contains(output, want) {
-		t.Fatalf("console output missing instance: have\n%s\nwant also %s", output, want)
-	}
-	if want := fmt.Sprintf("coinbase: %s", testAddress); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
-	}
-	if want := "at block: 0"; !strings.Contains(output, want) {
-		t.Fatalf("console output missing sync status: have\n%s\nwant also %s", output, want)
-	}
-	if want := fmt.Sprintf("datadir: %s", tester.workspace); !strings.Contains(output, want) {
-		t.Fatalf("console output missing coinbase: have\n%s\nwant also %s", output, want)
-	}
 }
 
 // Tests that JavaScript statement evaluation works as intended.
@@ -204,7 +173,7 @@ func TestInteractive(t *testing.T) {
 
 	go tester.console.Interactive()
 
-	// Wait for a prompt and send a statement back
+	// Wait for a promt and send a statement back
 	select {
 	case <-tester.input.scheduler:
 	case <-time.After(time.Second):
@@ -215,7 +184,7 @@ func TestInteractive(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("input feedback timeout")
 	}
-	// Wait for the second prompt and ensure first statement was evaluated
+	// Wait for the second promt and ensure first statement was evaluated
 	select {
 	case <-tester.input.scheduler:
 	case <-time.After(time.Second):
@@ -252,7 +221,7 @@ func TestExecute(t *testing.T) {
 }
 
 // Tests that the JavaScript objects returned by statement executions are properly
-// pretty printed instead of just displaying "[object]".
+// pretty printed instead of just displaing "[object]".
 func TestPrettyPrint(t *testing.T) {
 	tester := newTester(t, nil)
 	defer tester.Close(t)
@@ -289,7 +258,7 @@ func TestPrettyError(t *testing.T) {
 	defer tester.Close(t)
 	tester.console.Evaluate("throw 'hello'")
 
-	want := jsre.ErrorColor("hello") + "\n\tat <eval>:1:7(1)\n\n"
+	want := jsre.ErrorColor("hello") + "\n"
 	if output := tester.output.String(); output != want {
 		t.Fatalf("pretty error mismatch: have %s, want %s", output, want)
 	}
@@ -303,7 +272,7 @@ func TestIndenting(t *testing.T) {
 	}{
 		{`var a = 1;`, 0},
 		{`"some string"`, 0},
-		{`"some string with (parenthesis`, 0},
+		{`"some string with (parentesis`, 0},
 		{`"some string with newline
 		("`, 0},
 		{`function v(a,b) {}`, 0},

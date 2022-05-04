@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"math/big"
@@ -30,50 +31,52 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/beacon"
-	"github.com/xpaymentsorg/go-xpayments/consensus/clique"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
+	"github.com/xpaymentsorg/go-xpayments/contracts"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/bloombits"
-	"github.com/xpaymentsorg/go-xpayments/core/rawdb"
-	"github.com/xpaymentsorg/go-xpayments/core/state/pruner"
+	"github.com/xpaymentsorg/go-xpayments/core/state"
+	"github.com/xpaymentsorg/go-xpayments/eth/filters"
+	"github.com/xpaymentsorg/go-xpayments/rlp"
+
+	//"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
-	"github.com/xpaymentsorg/go-xpayments/eth/ethconfig"
-	"github.com/xpaymentsorg/go-xpayments/eth/filters"
 	"github.com/xpaymentsorg/go-xpayments/eth/gasprice"
-	"github.com/xpaymentsorg/go-xpayments/eth/protocols/eth"
-	"github.com/xpaymentsorg/go-xpayments/eth/protocols/snap"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/event"
 	"github.com/xpaymentsorg/go-xpayments/internal/ethapi"
-	"github.com/xpaymentsorg/go-xpayments/internal/shutdowncheck"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/miner"
 	"github.com/xpaymentsorg/go-xpayments/node"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/dnsdisc"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
 	"github.com/xpaymentsorg/go-xpayments/params"
-	"github.com/xpaymentsorg/go-xpayments/rlp"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 )
 
-// Config contains the configuration options of the ETH protocol.
-// Deprecated: use ethconfig.Config instead.
-type Config = ethconfig.Config
+type LesServer interface {
+	Start(srvr *p2p.Server)
+	Stop()
+	Protocols() []p2p.Protocol
+	SetBloomBitsIndexer(bbIndexer *core.ChainIndexer)
+}
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config *ethconfig.Config
+	config      *Config
+	chainConfig *params.ChainConfig
+
+	// Channel for shutting down the service
+	shutdownChan  chan bool    // Channel for shutting down the ethereum
+	stopDbUpgrade func() error // stop chain db sequential key upgrade
 
 	// Handlers
-	txPool             *core.TxPool
-	blockchain         *core.BlockChain
-	handler            *handler
-	ethDialCandidates  enode.Iterator
-	snapDialCandidates enode.Iterator
-	merger             *consensus.Merger
+	txPool          *core.TxPool
+	blockchain      *core.BlockChain
+	protocolManager *ProtocolManager
+	lesServer       LesServer
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -82,121 +85,76 @@ type Ethereum struct {
 	engine         consensus.Engine
 	accountManager *accounts.Manager
 
-	bloomRequests     chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
-	bloomIndexer      *core.ChainIndexer             // Bloom indexer operating during block imports
-	closeBloomHandler chan struct{}
+	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
+	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
 
-	APIBackend *EthAPIBackend
+	ApiBackend *EthApiBackend
 
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
 
-	networkID     uint64
+	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
 
-	p2pServer *p2p.Server
-
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+}
 
-	shutdownTracker *shutdowncheck.ShutdownTracker // Tracks if and when the node has shutdown ungracefully
+func (s *Ethereum) AddLesServer(ls LesServer) {
+	s.lesServer = ls
+	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
 // New creates a new Ethereum object (including the
 // initialisation of the common Ethereum object)
-func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
-	// Ensure configuration values are compatible and sane
+func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	if config.SyncMode == downloader.LightSync {
 		return nil, errors.New("can't run eth.Ethereum in light sync mode, use les.LightEthereum")
 	}
 	if !config.SyncMode.IsValid() {
 		return nil, fmt.Errorf("invalid sync mode %d", config.SyncMode)
 	}
-	if config.Miner.GasPrice == nil || config.Miner.GasPrice.Cmp(common.Big0) <= 0 {
-		log.Warn("Sanitizing invalid miner gas price", "provided", config.Miner.GasPrice, "updated", ethconfig.Defaults.Miner.GasPrice)
-		config.Miner.GasPrice = new(big.Int).Set(ethconfig.Defaults.Miner.GasPrice)
-	}
-	if config.NoPruning && config.TrieDirtyCache > 0 {
-		if config.SnapshotCache > 0 {
-			config.TrieCleanCache += config.TrieDirtyCache * 3 / 5
-			config.SnapshotCache += config.TrieDirtyCache * 2 / 5
-		} else {
-			config.TrieCleanCache += config.TrieDirtyCache
-		}
-		config.TrieDirtyCache = 0
-	}
-	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
-
-	// Transfer mining-related config to the ethash config.
-	ethashConfig := config.Ethash
-	ethashConfig.NotifyFull = config.Miner.NotifyFull
-
-	// Assemble the Ethereum object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+	chainDb, err := CreateDB(ctx, config, "chaindata")
 	if err != nil {
 		return nil, err
 	}
-	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlockWithOverride(chainDb, config.Genesis, config.OverrideArrowGlacier, config.OverrideTerminalTotalDifficulty)
+	stopDbUpgrade := upgradeDeduplicateData(chainDb)
+	chainConfig, genesisHash, genesisErr := core.SetupGenesisBlock(chainDb, config.Genesis)
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
-	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {
-		log.Error("Failed to recover state", "error", err)
-	}
-	merger := consensus.NewMerger(chainDb)
 	eth := &Ethereum{
-		config:            config,
-		merger:            merger,
-		chainDb:           chainDb,
-		eventMux:          stack.EventMux(),
-		accountManager:    stack.AccountManager(),
-		engine:            ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, config.Miner.Notify, config.Miner.Noverify, chainDb),
-		closeBloomHandler: make(chan struct{}),
-		networkID:         config.NetworkId,
-		gasPrice:          config.Miner.GasPrice,
-		etherbase:         config.Miner.Etherbase,
-		bloomRequests:     make(chan chan *bloombits.Retrieval),
-		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
-		p2pServer:         stack.Server(),
-		shutdownTracker:   shutdowncheck.NewShutdownTracker(chainDb),
+		config:         config,
+		chainDb:        chainDb,
+		chainConfig:    chainConfig,
+		eventMux:       ctx.EventMux,
+		accountManager: ctx.AccountManager,
+		engine:         CreateConsensusEngine(ctx, &config.Ethash, chainConfig, chainDb),
+		shutdownChan:   make(chan bool),
+		stopDbUpgrade:  stopDbUpgrade,
+		networkId:      config.NetworkId,
+		gasPrice:       config.GasPrice,
+		etherbase:      config.Etherbase,
+		bloomRequests:  make(chan chan *bloombits.Retrieval),
+		bloomIndexer:   NewBloomIndexer(chainDb, params.BloomBitsBlocks),
 	}
 
-	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
-	var dbVer = "<nil>"
-	if bcVersion != nil {
-		dbVer = fmt.Sprintf("%d", *bcVersion)
-	}
-	log.Info("Initialising Ethereum protocol", "network", config.NetworkId, "dbversion", dbVer)
+	log.Info("Initialising Ethereum protocol", "versions", ProtocolVersions, "network", config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
-		if bcVersion != nil && *bcVersion > core.BlockChainVersion {
-			return nil, fmt.Errorf("database version is v%d, Geth %s only supports v%d", *bcVersion, params.VersionWithMeta, core.BlockChainVersion)
-		} else if bcVersion == nil || *bcVersion < core.BlockChainVersion {
-			if bcVersion != nil { // only print warning on upgrade, not on init
-				log.Warn("Upgrade blockchain database version", "from", dbVer, "to", core.BlockChainVersion)
-			}
-			rawdb.WriteDatabaseVersion(chainDb, core.BlockChainVersion)
+		bcVersion := core.GetBlockChainVersion(chainDb)
+		if bcVersion != core.BlockChainVersion && bcVersion != 0 {
+			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, core.BlockChainVersion)
 		}
+		core.WriteBlockChainVersion(chainDb, core.BlockChainVersion)
 	}
 	var (
-		vmConfig = vm.Config{
-			EnablePreimageRecording: config.EnablePreimageRecording,
-		}
-		cacheConfig = &core.CacheConfig{
-			TrieCleanLimit:      config.TrieCleanCache,
-			TrieCleanJournal:    stack.ResolvePath(config.TrieCleanCacheJournal),
-			TrieCleanRejournal:  config.TrieCleanCacheRejournal,
-			TrieCleanNoPrefetch: config.NoPrefetch,
-			TrieDirtyLimit:      config.TrieDirtyCache,
-			TrieDirtyDisabled:   config.NoPruning,
-			TrieTimeLimit:       config.TrieTimeout,
-			SnapshotLimit:       config.SnapshotCache,
-			Preimages:           config.Preimages,
-		}
+		vmConfig    = vm.Config{EnablePreimageRecording: config.EnablePreimageRecording}
+		cacheConfig = &core.CacheConfig{Disabled: config.NoPruning, TrieNodeLimit: config.TrieCache, TrieTimeLimit: config.TrieTimeout}
 	)
-	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
+	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, eth.chainConfig, eth.engine, vmConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -204,71 +162,366 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if compat, ok := genesisErr.(*params.ConfigCompatError); ok {
 		log.Warn("Rewinding chain to upgrade configuration", "err", compat)
 		eth.blockchain.SetHead(compat.RewindTo)
-		rawdb.WriteChainConfig(chainDb, genesisHash, chainConfig)
+		core.WriteChainConfig(chainDb, genesisHash, chainConfig)
 	}
 	eth.bloomIndexer.Start(eth.blockchain)
 
 	if config.TxPool.Journal != "" {
-		config.TxPool.Journal = stack.ResolvePath(config.TxPool.Journal)
+		config.TxPool.Journal = ctx.ResolvePath(config.TxPool.Journal)
 	}
-	eth.txPool = core.NewTxPool(config.TxPool, chainConfig, eth.blockchain)
+	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
-	// Permit the downloader to use the trie cache allowance during fast sync
-	cacheLimit := cacheConfig.TrieCleanLimit + cacheConfig.TrieDirtyLimit + cacheConfig.SnapshotLimit
-	checkpoint := config.Checkpoint
-	if checkpoint == nil {
-		checkpoint = params.TrustedCheckpoints[genesisHash]
+	if common.RollbackHash != common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000") {
+		curBlock := eth.blockchain.CurrentBlock()
+		prevBlock := eth.blockchain.GetBlockByHash(common.RollbackHash)
+
+		if curBlock.NumberU64() > prevBlock.NumberU64() {
+			for ; curBlock != nil && curBlock.NumberU64() != prevBlock.NumberU64(); curBlock = eth.blockchain.GetBlock(curBlock.ParentHash(), curBlock.NumberU64()-1) {
+				eth.blockchain.Rollback([]common.Hash{curBlock.Hash()})
+			}
+		}
+
+		if prevBlock != nil {
+			err := eth.blockchain.SetHead(prevBlock.NumberU64())
+			if err != nil {
+				log.Crit("Err Rollback", "err", err)
+				return nil, err
+			}
+		}
 	}
-	if eth.handler, err = newHandler(&handlerConfig{
-		Database:           chainDb,
-		Chain:              eth.blockchain,
-		TxPool:             eth.txPool,
-		Merger:             merger,
-		Network:            config.NetworkId,
-		Sync:               config.SyncMode,
-		BloomCache:         uint64(cacheLimit),
-		EventMux:           eth.eventMux,
-		Checkpoint:         checkpoint,
-		PeerRequiredBlocks: config.PeerRequiredBlocks,
-	}); err != nil {
+
+	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb); err != nil {
 		return nil, err
 	}
+	eth.miner = miner.New(eth, eth.chainConfig, eth.EventMux(), eth.engine, ctx.GetConfig().AnnounceTxs)
+	eth.miner.SetExtra(makeExtraData(config.ExtraData))
 
-	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
-	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
-
-	eth.APIBackend = &EthAPIBackend{stack.Config().ExtRPCEnabled(), stack.Config().AllowUnprotectedTxs, eth, nil}
-	if eth.APIBackend.allowUnprotectedTxs {
-		log.Info("Unprotected transactions allowed")
-	}
+	eth.ApiBackend = &EthApiBackend{eth, nil}
 	gpoParams := config.GPO
 	if gpoParams.Default == nil {
-		gpoParams.Default = config.Miner.GasPrice
+		gpoParams.Default = config.GasPrice
 	}
-	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
+	eth.ApiBackend.gpo = gasprice.NewOracle(eth.ApiBackend, gpoParams)
 
-	// Setup DNS discovery iterators.
-	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
-	if err != nil {
-		return nil, err
+	// Set global ipc endpoint.
+	eth.blockchain.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
+
+	if eth.chainConfig.XDPoS != nil {
+		c := eth.engine.(*XDPoS.XDPoS)
+		signHook := func(block *types.Block) error {
+			eb, err := eth.Etherbase()
+			if err != nil {
+				log.Error("Cannot get etherbase for append m2 header", "err", err)
+				return fmt.Errorf("etherbase missing: %v", err)
+			}
+			ok := eth.txPool.IsSigner != nil && eth.txPool.IsSigner(eb)
+			if !ok {
+				return nil
+			}
+			if block.NumberU64()%common.MergeSignRange == 0 || !eth.chainConfig.IsTIP2019(block.Number()) {
+				if err := contracts.CreateTransactionSign(chainConfig, eth.txPool, eth.accountManager, block, chainDb); err != nil {
+					return fmt.Errorf("Fail to create tx sign for importing block: %v", err)
+				}
+			}
+			return nil
+		}
+
+		appendM2HeaderHook := func(block *types.Block) (*types.Block, bool, error) {
+			eb, err := eth.Etherbase()
+			if err != nil {
+				log.Error("Cannot get etherbase for append m2 header", "err", err)
+				return block, false, fmt.Errorf("etherbase missing: %v", err)
+			}
+			m1, err := c.RecoverSigner(block.Header())
+			if err != nil {
+				return block, false, fmt.Errorf("can't get block creator: %v", err)
+			}
+			m2, err := c.GetValidator(m1, eth.blockchain, block.Header())
+			if err != nil {
+				return block, false, fmt.Errorf("can't get block validator: %v", err)
+			}
+			if m2 == eb {
+				wallet, err := eth.accountManager.Find(accounts.Account{Address: eb})
+				if err != nil {
+					log.Error("Can't find coinbase account wallet", "err", err)
+					return block, false, err
+				}
+				header := block.Header()
+				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, XDPoS.SigHash(header).Bytes())
+				if err != nil || sighash == nil {
+					log.Error("Can't get signature hash of m2", "sighash", sighash, "err", err)
+					return block, false, err
+				}
+				header.Validator = sighash
+				return types.NewBlockWithHeader(header).WithBody(block.Transactions(), block.Uncles()), true, nil
+			}
+			return block, false, nil
+		}
+
+		eth.protocolManager.fetcher.SetSignHook(signHook)
+		eth.protocolManager.fetcher.SetAppendM2HeaderHook(appendM2HeaderHook)
+
+		// Hook prepares validators M2 for the current epoch at checkpoint block
+		c.HookValidator = func(header *types.Header, signers []common.Address) ([]byte, error) {
+			start := time.Now()
+			validators, err := GetValidators(eth.blockchain, signers)
+			if err != nil {
+				return []byte{}, err
+			}
+			header.Validators = validators
+			log.Debug("Time Calculated HookValidator ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+			return validators, nil
+		}
+
+		// Hook scans for bad masternodes and decide to penalty them
+		c.HookPenalty = func(chain consensus.ChainReader, blockNumberEpoc uint64) ([]common.Address, error) {
+			canonicalState, err := eth.blockchain.State()
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
+			}
+			prevEpoc := blockNumberEpoc - chain.Config().XDPoS.Epoch
+			if prevEpoc >= 0 {
+				start := time.Now()
+				prevHeader := chain.GetHeaderByNumber(prevEpoc)
+				penSigners := c.GetMasternodes(chain, prevHeader)
+				if len(penSigners) > 0 {
+					// Loop for each block to check missing sign.
+					for i := prevEpoc; i < blockNumberEpoc; i++ {
+						if i%common.MergeSignRange == 0 || !chainConfig.IsTIP2019(big.NewInt(int64(i))) {
+							bheader := chain.GetHeaderByNumber(i)
+							bhash := bheader.Hash()
+							block := chain.GetBlock(bhash, i)
+							if len(penSigners) > 0 {
+								signedMasternodes, err := contracts.GetSignersFromContract(canonicalState, block)
+								if err != nil {
+									return nil, err
+								}
+								if len(signedMasternodes) > 0 {
+									// Check signer signed?
+									for _, signed := range signedMasternodes {
+										for j, addr := range penSigners {
+											if signed == addr {
+												// Remove it from dupSigners.
+												penSigners = append(penSigners[:j], penSigners[j+1:]...)
+											}
+										}
+									}
+								}
+							} else {
+								break
+							}
+						}
+					}
+				}
+				log.Debug("Time Calculated HookPenalty ", "block", blockNumberEpoc, "time", common.PrettyDuration(time.Since(start)))
+				return penSigners, nil
+			}
+			return []common.Address{}, nil
+		}
+
+		// Hook scans for bad masternodes and decide to penalty them
+		c.HookPenaltyTIPSigning = func(chain consensus.ChainReader, header *types.Header, candidates []common.Address) ([]common.Address, error) {
+			prevEpoc := header.Number.Uint64() - chain.Config().XDPoS.Epoch
+			combackEpoch := uint64(0)
+			comebackLength := (common.LimitPenaltyEpoch + 1) * chain.Config().XDPoS.Epoch
+			if header.Number.Uint64() > comebackLength {
+				combackEpoch = header.Number.Uint64() - comebackLength
+			}
+			if prevEpoc >= 0 {
+				start := time.Now()
+
+				listBlockHash := make([]common.Hash, chain.Config().XDPoS.Epoch)
+
+				// get list block hash & stats total created block
+				statMiners := make(map[common.Address]int)
+				listBlockHash[0] = header.ParentHash
+				parentnumber := header.Number.Uint64() - 1
+				parentHash := header.ParentHash
+				for i := uint64(1); i < chain.Config().XDPoS.Epoch; i++ {
+					parentHeader := chain.GetHeader(parentHash, parentnumber)
+					miner, _ := c.RecoverSigner(parentHeader)
+					value, exist := statMiners[miner]
+					if exist {
+						value = value + 1
+					} else {
+						value = 1
+					}
+					statMiners[miner] = value
+					parentHash = parentHeader.ParentHash
+					parentnumber--
+					listBlockHash[i] = parentHash
+				}
+
+				// add list not miner to penalties
+				prevHeader := chain.GetHeaderByNumber(prevEpoc)
+				preMasternodes := c.GetMasternodes(chain, prevHeader)
+				penalties := []common.Address{}
+				for miner, total := range statMiners {
+					if total < common.MinimunMinerBlockPerEpoch {
+						log.Debug("Find a node not enough requirement create block", "addr", miner.Hex(), "total", total)
+						penalties = append(penalties, miner)
+					}
+				}
+				for _, addr := range preMasternodes {
+					if _, exist := statMiners[addr]; !exist {
+						log.Debug("Find a node don't create block", "addr", addr.Hex())
+						penalties = append(penalties, addr)
+					}
+				}
+
+				// get list check penalties signing block & list master nodes wil comeback
+				penComebacks := []common.Address{}
+				if combackEpoch > 0 {
+					combackHeader := chain.GetHeaderByNumber(combackEpoch)
+					penalties := common.ExtractAddressFromBytes(combackHeader.Penalties)
+					for _, penaltie := range penalties {
+						for _, addr := range candidates {
+							if penaltie == addr {
+								penComebacks = append(penComebacks, penaltie)
+							}
+						}
+					}
+				}
+
+				// Loop for each block to check missing sign. with comeback nodes
+				mapBlockHash := map[common.Hash]bool{}
+				for i := common.RangeReturnSigner - 1; i >= 0; i-- {
+					if len(penComebacks) > 0 {
+						blockNumber := header.Number.Uint64() - uint64(i) - 1
+						bhash := listBlockHash[i]
+						if blockNumber%common.MergeSignRange == 0 {
+							mapBlockHash[bhash] = true
+						}
+						signData, ok := c.BlockSigners.Get(bhash)
+						if !ok {
+							block := chain.GetBlock(bhash, blockNumber)
+							txs := block.Transactions()
+							signData = c.CacheSigner(bhash, txs)
+						}
+						txs := signData.([]*types.Transaction)
+						// Check signer signed?
+						for _, tx := range txs {
+							blkHash := common.BytesToHash(tx.Data()[len(tx.Data())-32:])
+							from := *tx.From()
+							if mapBlockHash[blkHash] {
+								for j, addr := range penComebacks {
+									if from == addr {
+										// Remove it from dupSigners.
+										penComebacks = append(penComebacks[:j], penComebacks[j+1:]...)
+										break
+									}
+								}
+							}
+						}
+					} else {
+						break
+					}
+				}
+
+				log.Debug("Time Calculated HookPenaltyTIPSigning ", "block", header.Number, "hash", header.Hash().Hex(), "pen comeback nodes", len(penComebacks), "not enough miner", len(penalties), "time", common.PrettyDuration(time.Since(start)))
+				penalties = append(penalties, penComebacks...)
+				if chain.Config().IsTIPRandomize(header.Number) {
+					return penalties, nil
+				}
+				return penComebacks, nil
+			}
+			return []common.Address{}, nil
+		}
+
+		// Hook calculates reward for masternodes
+		c.HookReward = func(chain consensus.ChainReader, stateBlock *state.StateDB, header *types.Header) (error, map[string]interface{}) {
+			parentHeader := eth.blockchain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+			canonicalState, err := eth.blockchain.StateAt(parentHeader.Root)
+			if canonicalState == nil || err != nil {
+				log.Crit("Can't get state at head of canonical chain", "head number", header.Number.Uint64(), "err", err)
+			}
+			number := header.Number.Uint64()
+			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
+			foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
+			if foundationWalletAddr == (common.Address{}) {
+				log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
+				return err, nil
+			}
+			rewards := make(map[string]interface{})
+			if number > 0 && number-rCheckpoint > 0 && foundationWalletAddr != (common.Address{}) {
+				start := time.Now()
+				// Get signers in blockSigner smartcontract.
+				// Get reward inflation.
+				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
+				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
+
+				totalSigner := new(uint64)
+				signers, err := contracts.GetRewardForCheckpoint(c, chain, header, rCheckpoint, totalSigner)
+
+				log.Debug("Time Get Signers", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+				if err != nil {
+					log.Crit("Fail to get signers for reward checkpoint", "error", err)
+				}
+				rewards["signers"] = signers
+				rewardSigners, err := contracts.CalculateRewardForSigner(chainReward, signers, *totalSigner)
+				if err != nil {
+					log.Crit("Fail to calculate reward for signers", "error", err)
+				}
+				// Add reward for coin holders.
+				voterResults := make(map[common.Address]interface{})
+				if len(signers) > 0 {
+					for signer, calcReward := range rewardSigners {
+						err, rewards := contracts.CalculateRewardForHolders(foundationWalletAddr, canonicalState, signer, calcReward, number)
+						if err != nil {
+							log.Crit("Fail to calculate reward for holders.", "error", err)
+						}
+						if len(rewards) > 0 {
+							for holder, reward := range rewards {
+								stateBlock.AddBalance(holder, reward)
+							}
+						}
+						voterResults[signer] = rewards
+					}
+				}
+				rewards["rewards"] = voterResults
+				log.Debug("Time Calculated HookReward ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+			}
+			return nil, rewards
+		}
+
+		// Hook verifies masternodes set
+		c.HookVerifyMNs = func(header *types.Header, signers []common.Address) error {
+			number := header.Number.Int64()
+			if number > 0 && number%common.EpocBlockRandomize == 0 {
+				start := time.Now()
+				validators, err := GetValidators(eth.blockchain, signers)
+				log.Debug("Time Calculated HookVerifyMNs ", "block", header.Number.Uint64(), "time", common.PrettyDuration(time.Since(start)))
+				if err != nil {
+					return err
+				}
+				if !bytes.Equal(header.Validators, validators) {
+					return XDPoS.ErrInvalidCheckpointValidators
+				}
+			}
+			return nil
+		}
+
+		eth.txPool.IsSigner = func(address common.Address) bool {
+			currentHeader := eth.blockchain.CurrentHeader()
+			header := currentHeader
+			// Sometimes, the latest block hasn't been inserted to chain yet
+			// getSnapshot from parent block if it exists
+			parentHeader := eth.blockchain.GetHeader(currentHeader.ParentHash, currentHeader.Number.Uint64()-1)
+			if parentHeader != nil {
+				// not genesis block
+				header = parentHeader
+			}
+			snap, err := c.GetSnapshot(eth.blockchain, header)
+			if err != nil {
+				log.Error("Can't get snapshot with at ", "number", header.Number, "hash", header.Hash().Hex(), "err", err)
+				return false
+			}
+			if _, ok := snap.Signers[address]; ok {
+				return true
+			}
+			return false
+		}
 	}
-	eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start the RPC service
-	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
-
-	// Register the backend on the node
-	stack.RegisterAPIs(eth.APIs())
-	stack.RegisterProtocols(eth.Protocols())
-	stack.RegisterLifecycle(eth)
-
-	// Successful startup; push a marker and check previous unclean shutdowns.
-	eth.shutdownTracker.MarkStartup()
-
 	return eth, nil
 }
 
@@ -277,7 +530,7 @@ func makeExtraData(extra []byte) []byte {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
 			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
-			"geth",
+			"XDC",
 			runtime.Version(),
 			runtime.GOOS,
 		})
@@ -289,10 +542,54 @@ func makeExtraData(extra []byte) []byte {
 	return extra
 }
 
-// APIs return the collection of RPC services the ethereum package offers.
+// CreateDB creates the chain database.
+func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Database, error) {
+	db, err := ctx.OpenDatabase(name, config.DatabaseCache, config.DatabaseHandles)
+	if err != nil {
+		return nil, err
+	}
+	if db, ok := db.(*ethdb.LDBDatabase); ok {
+		db.Meter("eth/db/chaindata/")
+	}
+	return db, nil
+}
+
+// CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
+func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
+	// If delegated-proof-of-stake is requested, set it up
+	if chainConfig.XDPoS != nil {
+		return XDPoS.New(chainConfig.XDPoS, db)
+	}
+
+	// Otherwise assume proof-of-work
+	switch {
+	case config.PowMode == ethash.ModeFake:
+		log.Warn("Ethash used in fake mode")
+		return ethash.NewFaker()
+	case config.PowMode == ethash.ModeTest:
+		log.Warn("Ethash used in test mode")
+		return ethash.NewTester()
+	case config.PowMode == ethash.ModeShared:
+		log.Warn("Ethash used in shared mode")
+		return ethash.NewShared()
+	default:
+		engine := ethash.New(ethash.Config{
+			CacheDir:       ctx.ResolvePath(config.CacheDir),
+			CachesInMem:    config.CachesInMem,
+			CachesOnDisk:   config.CachesOnDisk,
+			DatasetDir:     config.DatasetDir,
+			DatasetsInMem:  config.DatasetsInMem,
+			DatasetsOnDisk: config.DatasetsOnDisk,
+		})
+		engine.SetThreads(-1) // Disable CPU mining
+		return engine
+	}
+}
+
+// APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.APIBackend)
+	apis := ethapi.GetAPIs(s.ApiBackend)
 
 	// Append any APIs exposed explicitly by the consensus engine
 	apis = append(apis, s.engine.APIs(s.BlockChain())...)
@@ -312,7 +609,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.handler.downloader, s.eventMux),
+			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
 			Public:    true,
 		}, {
 			Namespace: "miner",
@@ -322,7 +619,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "eth",
 			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, false, 5*time.Minute),
+			Service:   filters.NewPublicFilterAPI(s.ApiBackend, false),
 			Public:    true,
 		}, {
 			Namespace: "admin",
@@ -336,7 +633,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}, {
 			Namespace: "debug",
 			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s),
+			Service:   NewPrivateDebugAPI(s.chainConfig, s),
 		}, {
 			Namespace: "net",
 			Version:   "1.0",
@@ -373,138 +670,89 @@ func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	return common.Address{}, fmt.Errorf("etherbase must be explicitly specified")
 }
 
-// isLocalBlock checks whether the specified block is mined
-// by local miner accounts.
-//
-// We regard two types of accounts as local miner account: etherbase
-// and accounts specified via `txpool.locals` flag.
-func (s *Ethereum) isLocalBlock(header *types.Header) bool {
-	author, err := s.engine.Author(header)
+// set in js console via admin interface or wrapper from cli flags
+func (self *Ethereum) SetEtherbase(etherbase common.Address) {
+	self.lock.Lock()
+	self.etherbase = etherbase
+	self.lock.Unlock()
+
+	self.miner.SetEtherbase(etherbase)
+}
+
+// ValidateMasternode checks if node's address is in set of masternodes
+func (s *Ethereum) ValidateMasternode() (bool, error) {
+	eb, err := s.Etherbase()
 	if err != nil {
-		log.Warn("Failed to retrieve block author", "number", header.Number.Uint64(), "hash", header.Hash(), "err", err)
-		return false
+		return false, err
 	}
-	// Check whether the given address is etherbase.
-	s.lock.RLock()
-	etherbase := s.etherbase
-	s.lock.RUnlock()
-	if author == etherbase {
-		return true
-	}
-	// Check whether the given address is specified by `txpool.local`
-	// CLI flag.
-	for _, account := range s.config.TxPool.Locals {
-		if account == author {
-			return true
-		}
-	}
-	return false
-}
-
-// shouldPreserve checks whether we should preserve the given block
-// during the chain reorg depending on whether the author of block
-// is a local account.
-func (s *Ethereum) shouldPreserve(header *types.Header) bool {
-	// The reason we need to disable the self-reorg preserving for clique
-	// is it can be probable to introduce a deadlock.
-	//
-	// e.g. If there are 7 available signers
-	//
-	// r1   A
-	// r2     B
-	// r3       C
-	// r4         D
-	// r5   A      [X] F G
-	// r6    [X]
-	//
-	// In the round5, the inturn signer E is offline, so the worst case
-	// is A, F and G sign the block of round5 and reject the block of opponents
-	// and in the round6, the last available signer B is offline, the whole
-	// network is stuck.
-	if _, ok := s.engine.(*clique.Clique); ok {
-		return false
-	}
-	return s.isLocalBlock(header)
-}
-
-// SetEtherbase sets the mining reward address.
-func (s *Ethereum) SetEtherbase(etherbase common.Address) {
-	s.lock.Lock()
-	s.etherbase = etherbase
-	s.lock.Unlock()
-
-	s.miner.SetEtherbase(etherbase)
-}
-
-// StartMining starts the miner with the given number of CPU threads. If mining
-// is already running, this method adjust the number of threads allowed to use
-// and updates the minimum price required by the transaction pool.
-func (s *Ethereum) StartMining(threads int) error {
-	// Update the thread count within the consensus engine
-	type threaded interface {
-		SetThreads(threads int)
-	}
-	if th, ok := s.engine.(threaded); ok {
-		log.Info("Updated mining threads", "threads", threads)
-		if threads == 0 {
-			threads = -1 // Disable the miner from within
-		}
-		th.SetThreads(threads)
-	}
-	// If the miner was not running, initialize it
-	if !s.IsMining() {
-		// Propagate the initial price point to the transaction pool
-		s.lock.RLock()
-		price := s.gasPrice
-		s.lock.RUnlock()
-		s.txPool.SetGasPrice(price)
-
-		// Configure the local mining address
-		eb, err := s.Etherbase()
+	if s.chainConfig.XDPoS != nil {
+		//check if miner's wallet is in set of validators
+		c := s.engine.(*XDPoS.XDPoS)
+		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
-			log.Error("Cannot start mining without etherbase", "err", err)
-			return fmt.Errorf("etherbase missing: %v", err)
+			return false, fmt.Errorf("Can't verify masternode permission: %v", err)
 		}
-		var cli *clique.Clique
-		if c, ok := s.engine.(*clique.Clique); ok {
-			cli = c
-		} else if cl, ok := s.engine.(*beacon.Beacon); ok {
-			if c, ok := cl.InnerEngine().(*clique.Clique); ok {
-				cli = c
-			}
+		if _, authorized := snap.Signers[eb]; !authorized {
+			//This miner doesn't belong to set of validators
+			return false, nil
 		}
-		if cli != nil {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			cli.Authorize(eb, wallet.SignData)
-		}
-		// If mining is started, we can disable the transaction rejection mechanism
-		// introduced to speed sync times.
-		atomic.StoreUint32(&s.handler.acceptTxs, 1)
-
-		go s.miner.Start(eb)
+	} else {
+		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
 	}
+	return true, nil
+}
+
+// ValidateMasternodeTestNet checks if node's address is in set of masternodes in Testnet
+func (s *Ethereum) ValidateMasternodeTestnet() (bool, error) {
+	eb, err := s.Etherbase()
+	if err != nil {
+		return false, err
+	}
+	if s.chainConfig.XDPoS == nil {
+		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
+	}
+	masternodes := []common.Address{
+		common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
+		common.HexToAddress("0xd76fd76F7101811726DCE9E43C2617706a4c45c8"),
+		common.HexToAddress("0x8A97753311aeAFACfd76a68Cf2e2a9808d3e65E8"),
+	}
+	for _, m := range masternodes {
+		if m == eb {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Ethereum) StartStaking(local bool) error {
+	eb, err := s.Etherbase()
+	if err != nil {
+		log.Error("Cannot start mining without etherbase", "err", err)
+		return fmt.Errorf("etherbase missing: %v", err)
+	}
+	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
+		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+		if wallet == nil || err != nil {
+			log.Error("Etherbase account unavailable locally", "err", err)
+			return fmt.Errorf("signer missing: %v", err)
+		}
+		XDPoS.Authorize(eb, wallet.SignHash)
+	}
+	if local {
+		// If local (CPU) mining is started, we can disable the transaction rejection
+		// mechanism introduced to speed sync times. CPU mining on mainnet is ludicrous
+		// so noone will ever hit this path, whereas marking sync done on CPU mining
+		// will ensure that private networks work in single miner mode too.
+		atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
+	}
+	go s.miner.Start(eb)
 	return nil
 }
 
-// StopMining terminates the miner, both at the consensus engine level as well as
-// at the block creation level.
-func (s *Ethereum) StopMining() {
-	// Update the thread count within the consensus engine
-	type threaded interface {
-		SetThreads(threads int)
-	}
-	if th, ok := s.engine.(threaded); ok {
-		th.SetThreads(-1)
-	}
-	// Stop the block creating itself
+func (s *Ethereum) StopStaking() {
 	s.miner.Stop()
 }
-
-func (s *Ethereum) IsMining() bool      { return s.miner.Mining() }
+func (s *Ethereum) IsStaking() bool     { return s.miner.Mining() }
 func (s *Ethereum) Miner() *miner.Miner { return s.miner }
 
 func (s *Ethereum) AccountManager() *accounts.Manager  { return s.accountManager }
@@ -514,72 +762,111 @@ func (s *Ethereum) EventMux() *event.TypeMux           { return s.eventMux }
 func (s *Ethereum) Engine() consensus.Engine           { return s.engine }
 func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
-func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.downloader }
-func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.acceptTxs) == 1 }
-func (s *Ethereum) SetSynced()                         { atomic.StoreUint32(&s.handler.acceptTxs, 1) }
-func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
-func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
-func (s *Ethereum) Merger() *consensus.Merger          { return s.merger }
-func (s *Ethereum) SyncMode() downloader.SyncMode {
-	mode, _ := s.handler.chainSync.modeAndLocalHead()
-	return mode
-}
+func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
+func (s *Ethereum) NetVersion() uint64                 { return s.networkId }
+func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 
-// Protocols returns all the currently configured
+// Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.ethDialCandidates)
-	if s.config.SnapshotCache > 0 {
-		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.snapDialCandidates)...)
+	if s.lesServer == nil {
+		return s.protocolManager.SubProtocols
 	}
-	return protos
+	return append(s.protocolManager.SubProtocols, s.lesServer.Protocols()...)
 }
 
-// Start implements node.Lifecycle, starting all internal goroutines needed by the
+// Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
-func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
-
+func (s *Ethereum) Start(srvr *p2p.Server) error {
 	// Start the bloom bits servicing goroutines
-	s.startBloomHandlers(params.BloomBitsBlocks)
+	s.startBloomHandlers()
 
-	// Regularly update shutdown marker
-	s.shutdownTracker.Start()
+	// Start the RPC service
+	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
 
 	// Figure out a max peers count based on the server limits
-	maxPeers := s.p2pServer.MaxPeers
+	maxPeers := srvr.MaxPeers
 	if s.config.LightServ > 0 {
-		if s.config.LightPeers >= s.p2pServer.MaxPeers {
-			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, s.p2pServer.MaxPeers)
+		if s.config.LightPeers >= srvr.MaxPeers {
+			return fmt.Errorf("invalid peer config: light peer count (%d) >= total peer count (%d)", s.config.LightPeers, srvr.MaxPeers)
 		}
 		maxPeers -= s.config.LightPeers
 	}
 	// Start the networking layer and the light server if requested
-	s.handler.Start(maxPeers)
+	s.protocolManager.Start(maxPeers)
+	if s.lesServer != nil {
+		s.lesServer.Start(srvr)
+	}
 	return nil
 }
 
-// Stop implements node.Lifecycle, terminating all internal goroutines used by the
+// Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	// Stop all the peer-related stuff first.
-	s.ethDialCandidates.Close()
-	s.snapDialCandidates.Close()
-	s.handler.Stop()
-
-	// Then stop everything else.
+	if s.stopDbUpgrade != nil {
+		s.stopDbUpgrade()
+	}
 	s.bloomIndexer.Close()
-	close(s.closeBloomHandler)
-	s.txPool.Stop()
-	s.miner.Close()
 	s.blockchain.Stop()
-	s.engine.Close()
-
-	// Clean shutdown marker as the last thing before closing db
-	s.shutdownTracker.Stop()
-
-	s.chainDb.Close()
+	s.protocolManager.Stop()
+	if s.lesServer != nil {
+		s.lesServer.Stop()
+	}
+	s.txPool.Stop()
+	s.miner.Stop()
 	s.eventMux.Stop()
 
+	s.chainDb.Close()
+	close(s.shutdownChan)
+
 	return nil
+}
+
+func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
+	if bc.Config().XDPoS == nil {
+		return nil, core.ErrNotXDPoS
+	}
+	client, err := bc.GetClient()
+	if err != nil {
+		return nil, err
+	}
+	// Check m2 exists on chaindb.
+	// Get secrets and opening at epoc block checkpoint.
+
+	var candidates []int64
+	if err != nil {
+		return nil, err
+	}
+	lenSigners := int64(len(masternodes))
+	if lenSigners > 0 {
+		for _, addr := range masternodes {
+			random, err := contracts.GetRandomizeFromContract(client, addr)
+			if err != nil {
+				return nil, err
+			}
+			candidates = append(candidates, random)
+		}
+		// Get randomize m2 list.
+		m2, err := contracts.GenM2FromRandomize(candidates, lenSigners)
+		if err != nil {
+			return nil, err
+		}
+		return contracts.BuildValidatorFromM2(m2), nil
+	}
+	return nil, core.ErrNotFoundM1
+}
+
+func rewardInflation(chainReward *big.Int, number uint64, blockPerYear uint64) *big.Int {
+	if blockPerYear*2 <= number && number < blockPerYear*6 {
+		chainReward.Div(chainReward, new(big.Int).SetUint64(2))
+	}
+	if blockPerYear*6 <= number {
+		chainReward.Div(chainReward, new(big.Int).SetUint64(4))
+	}
+
+	return chainReward
+}
+
+func (s *Ethereum) GetPeer() int {
+	return len(s.protocolManager.peers.peers)
 }

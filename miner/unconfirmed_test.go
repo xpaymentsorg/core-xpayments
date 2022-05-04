@@ -19,17 +19,15 @@ package miner
 import (
 	"testing"
 
+	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 )
 
-// noopChainRetriever is an implementation of headerRetriever that always
+// noopHeaderRetriever is an implementation of headerRetriever that always
 // returns nil for any requested headers.
-type noopChainRetriever struct{}
+type noopHeaderRetriever struct{}
 
-func (r *noopChainRetriever) GetHeaderByNumber(number uint64) *types.Header {
-	return nil
-}
-func (r *noopChainRetriever) GetBlockByNumber(number uint64) *types.Block {
+func (r *noopHeaderRetriever) GetHeaderByNumber(number uint64) *types.Header {
 	return nil
 }
 
@@ -38,11 +36,11 @@ func (r *noopChainRetriever) GetBlockByNumber(number uint64) *types.Block {
 func TestUnconfirmedInsertBounds(t *testing.T) {
 	limit := uint(10)
 
-	pool := newUnconfirmedBlocks(new(noopChainRetriever), limit)
+	pool := newUnconfirmedBlocks(new(noopHeaderRetriever), limit)
 	for depth := uint64(0); depth < 2*uint64(limit); depth++ {
 		// Insert multiple blocks for the same level just to stress it
 		for i := 0; i < int(depth); i++ {
-			pool.Insert(depth, [32]byte{byte(depth), byte(i)})
+			pool.Insert(depth, common.Hash([32]byte{byte(depth), byte(i)}))
 		}
 		// Validate that no blocks below the depth allowance are left in
 		pool.blocks.Do(func(block interface{}) {
@@ -60,9 +58,9 @@ func TestUnconfirmedShifts(t *testing.T) {
 	// Create a pool with a few blocks on various depths
 	limit, start := uint(10), uint64(25)
 
-	pool := newUnconfirmedBlocks(new(noopChainRetriever), limit)
+	pool := newUnconfirmedBlocks(new(noopHeaderRetriever), limit)
 	for depth := start; depth < start+uint64(limit); depth++ {
-		pool.Insert(depth, [32]byte{byte(depth)})
+		pool.Insert(depth, common.Hash([32]byte{byte(depth)}))
 	}
 	// Try to shift below the limit and ensure no blocks are dropped
 	pool.Shift(start + uint64(limit) - 1)

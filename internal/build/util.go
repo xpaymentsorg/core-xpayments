@@ -17,12 +17,9 @@
 package build
 
 import (
-	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
-	"go/parser"
-	"go/token"
 	"io"
 	"io/ioutil"
 	"log"
@@ -30,9 +27,8 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"text/template"
-	"time"
 )
 
 var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
@@ -54,6 +50,15 @@ func MustRunCommand(cmd string, args ...string) {
 	MustRun(exec.Command(cmd, args...))
 }
 
+// GOPATH returns the value that the GOPATH environment
+// variable should be set to.
+func GOPATH() string {
+	if os.Getenv("GOPATH") == "" {
+		log.Fatal("GOPATH is not set")
+	}
+	return os.Getenv("GOPATH")
+}
+
 var warnedAboutGit bool
 
 // RunGit runs a git subcommand and returns its output.
@@ -62,14 +67,13 @@ func RunGit(args ...string) string {
 	cmd := exec.Command("git", args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		if e, ok := err.(*exec.Error); ok && e.Err == exec.ErrNotFound {
-			if !warnedAboutGit {
-				log.Println("Warning: can't find 'git' in PATH")
-				warnedAboutGit = true
-			}
-			return ""
+	if err := cmd.Run(); err == exec.ErrNotFound {
+		if !warnedAboutGit {
+			log.Println("Warning: can't find 'git' in PATH")
+			warnedAboutGit = true
 		}
+		return ""
+	} else if err != nil {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
 	}
 	return strings.TrimSpace(stdout.String())
@@ -84,116 +88,63 @@ func readGitFile(file string) string {
 	return strings.TrimSpace(string(content))
 }
 
-// Render renders the given template file into outputFile.
-func Render(templateFile, outputFile string, outputPerm os.FileMode, x interface{}) {
-	tpl := template.Must(template.ParseFiles(templateFile))
-	render(tpl, outputFile, outputPerm, x)
-}
-
-// RenderString renders the given template string into outputFile.
-func RenderString(templateContent, outputFile string, outputPerm os.FileMode, x interface{}) {
-	tpl := template.Must(template.New("").Parse(templateContent))
-	render(tpl, outputFile, outputPerm, x)
-}
-
-func render(tpl *template.Template, outputFile string, outputPerm os.FileMode, x interface{}) {
-	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
+// CopyFile copies a file.
+func CopyFile(dst, src string, mode os.FileMode) {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		log.Fatal(err)
 	}
-	out, err := os.OpenFile(outputFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, outputPerm)
+	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := tpl.Execute(out, x); err != nil {
+	defer destFile.Close()
+
+	srcFile, err := os.Open(src)
+	if err != nil {
 		log.Fatal(err)
 	}
-	if err := out.Close(); err != nil {
+	defer srcFile.Close()
+
+	if _, err := io.Copy(destFile, srcFile); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// UploadSFTP uploads files to a remote host using the sftp command line tool.
-// The destination host may be specified either as [user@]host[: or as a URI in
-// the form sftp://[user@]host[:port].
-func UploadSFTP(identityFile, host, dir string, files []string) error {
-	sftp := exec.Command("sftp")
-	sftp.Stderr = os.Stderr
-	if identityFile != "" {
-		sftp.Args = append(sftp.Args, "-i", identityFile)
-	}
-	sftp.Args = append(sftp.Args, host)
-	fmt.Println(">>>", strings.Join(sftp.Args, " "))
-	if *DryRunFlag {
-		return nil
-	}
+// GoTool returns the command that runs a go tool. This uses go from GOROOT instead of PATH
+// so that go commands executed by build use the same version of Go as the 'host' that runs
+// build code. e.g.
+//
+//     /usr/lib/go-1.8/bin/go run build/ci.go ...
+//
+// runs using go 1.8 and invokes go 1.8 tools from the same GOROOT. This is also important
+// because runtime.Version checks on the host should match the tools that are run.
+func GoTool(tool string, args ...string) *exec.Cmd {
+	args = append([]string{tool}, args...)
+	return exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), args...)
+}
 
-	stdin, err := sftp.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("can't create stdin pipe for sftp: %v", err)
-	}
-	stdout, err := sftp.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("can't create stdout pipe for sftp: %v", err)
-	}
-	if err := sftp.Start(); err != nil {
-		return err
-	}
-	in := io.MultiWriter(stdin, os.Stdout)
-	for _, f := range files {
-		fmt.Fprintln(in, "put", f, path.Join(dir, filepath.Base(f)))
-	}
-	fmt.Fprintln(in, "exit")
-	// Some issue with the PPA sftp server makes it so the server does not
-	// respond properly to a 'bye', 'exit' or 'quit' from the client.
-	// To work around that, we check the output, and when we see the client
-	// exit command, we do a hard exit.
-	// See
-	// https://github.com/kolban-google/sftp-gcs/issues/23
-	// https://github.com/mscdex/ssh2/pull/1111
-	aborted := false
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			txt := scanner.Text()
-			fmt.Println(txt)
-			if txt == "sftp> exit" {
-				// Give it .5 seconds to exit (server might be fixed), then
-				// hard kill it from the outside
-				time.Sleep(500 * time.Millisecond)
-				aborted = true
-				sftp.Process.Kill()
-			}
+// ExpandPackagesNoVendor expands a cmd/go import path pattern, skipping
+// vendored packages.
+func ExpandPackagesNoVendor(patterns []string) []string {
+	expand := false
+	for _, pkg := range patterns {
+		if strings.Contains(pkg, "...") {
+			expand = true
 		}
-	}()
-	stdin.Close()
-	err = sftp.Wait()
-	if aborted {
-		return nil
 	}
-	return err
-}
-
-// FindMainPackages finds all 'main' packages in the given directory and returns their
-// package paths.
-func FindMainPackages(dir string) []string {
-	var commands []string
-	cmds, err := ioutil.ReadDir(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, cmd := range cmds {
-		pkgdir := filepath.Join(dir, cmd.Name())
-		pkgs, err := parser.ParseDir(token.NewFileSet(), pkgdir, nil, parser.PackageClauseOnly)
+	if expand {
+		cmd := GoTool("list", patterns...)
+		out, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("package listing failed: %v\n%s", err, string(out))
 		}
-		for name := range pkgs {
-			if name == "main" {
-				path := "./" + filepath.ToSlash(pkgdir)
-				commands = append(commands, path)
-				break
+		var packages []string
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "/vendor/") {
+				packages = append(packages, strings.TrimSpace(line))
 			}
 		}
+		return packages
 	}
-	return commands
+	return patterns
 }

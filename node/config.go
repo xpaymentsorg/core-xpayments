@@ -24,19 +24,19 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
+	"github.com/xpaymentsorg/go-xpayments/accounts"
+	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
+	"github.com/xpaymentsorg/go-xpayments/accounts/usbwallet"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
-	"github.com/xpaymentsorg/go-xpayments/rpc"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 )
 
 const (
 	datadirPrivateKey      = "nodekey"            // Path within the datadir to the node's private key
-	datadirJWTKey          = "jwtsecret"          // Path within the datadir to the node's jwt secret
 	datadirDefaultKeyStore = "keystore"           // Path within the datadir to the keystore
 	datadirStaticNodes     = "static-nodes.json"  // Path within the datadir to the static node list
 	datadirTrustedNodes    = "trusted-nodes.json" // Path within the datadir to the trusted node list
@@ -78,35 +78,22 @@ type Config struct {
 	// is created by New and destroyed when the node is stopped.
 	KeyStoreDir string `toml:",omitempty"`
 
-	// ExternalSigner specifies an external URI for a clef-type signer
-	ExternalSigner string `toml:",omitempty"`
-
 	// UseLightweightKDF lowers the memory and CPU requirements of the key store
 	// scrypt KDF at the expense of security.
 	UseLightweightKDF bool `toml:",omitempty"`
 
-	// InsecureUnlockAllowed allows user to unlock accounts in unsafe http environment.
-	InsecureUnlockAllowed bool `toml:",omitempty"`
-
 	// NoUSB disables hardware wallet monitoring and connectivity.
-	// Deprecated: USB monitoring is disabled by default and must be enabled explicitly.
 	NoUSB bool `toml:",omitempty"`
-
-	// USB enables hardware wallet monitoring and connectivity.
-	USB bool `toml:",omitempty"`
-
-	// SmartCardDaemonPath is the path to the smartcard daemon's socket
-	SmartCardDaemonPath string `toml:",omitempty"`
 
 	// IPCPath is the requested location to place the IPC endpoint. If the path is
 	// a simple file name, it is placed inside the data directory (or on the root
 	// pipe path on Windows), whereas if it's a resolvable path name (absolute or
 	// relative), then that specific path is enforced. An empty path disables IPC.
-	IPCPath string
+	IPCPath string `toml:",omitempty"`
 
 	// HTTPHost is the host interface on which to start the HTTP RPC server. If this
 	// field is empty, no HTTP API endpoint will be started.
-	HTTPHost string
+	HTTPHost string `toml:",omitempty"`
 
 	// HTTPPort is the TCP port number on which to start the HTTP RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful
@@ -130,36 +117,16 @@ type Config struct {
 	// HTTPModules is a list of API modules to expose via the HTTP RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	HTTPModules []string
-
-	// HTTPTimeouts allows for customization of the timeout values used by the HTTP RPC
-	// interface.
-	HTTPTimeouts rpc.HTTPTimeouts
-
-	// HTTPPathPrefix specifies a path prefix on which http-rpc is to be served.
-	HTTPPathPrefix string `toml:",omitempty"`
-
-	// AuthAddr is the listening address on which authenticated APIs are provided.
-	AuthAddr string `toml:",omitempty"`
-
-	// AuthPort is the port number on which authenticated APIs are provided.
-	AuthPort int `toml:",omitempty"`
-
-	// AuthVirtualHosts is the list of virtual hostnames which are allowed on incoming requests
-	// for the authenticated api. This is by default {'localhost'}.
-	AuthVirtualHosts []string `toml:",omitempty"`
+	HTTPModules []string `toml:",omitempty"`
 
 	// WSHost is the host interface on which to start the websocket RPC server. If
 	// this field is empty, no websocket API endpoint will be started.
-	WSHost string
+	WSHost string `toml:",omitempty"`
 
 	// WSPort is the TCP port number on which to start the websocket RPC server. The
 	// default zero value is/ valid and will pick a port number randomly (useful for
 	// ephemeral nodes).
 	WSPort int `toml:",omitempty"`
-
-	// WSPathPrefix specifies a path prefix on which ws-rpc is to be served.
-	WSPathPrefix string `toml:",omitempty"`
 
 	// WSOrigins is the list of domain to accept websocket requests from. Please be
 	// aware that the server can only act upon the HTTP request the client sends and
@@ -169,7 +136,7 @@ type Config struct {
 	// WSModules is a list of API modules to expose via the websocket RPC interface.
 	// If the module list is empty, all RPC API endpoints designated public will be
 	// exposed.
-	WSModules []string
+	WSModules []string `toml:",omitempty"`
 
 	// WSExposeAll exposes all API modules via the WebSocket RPC interface rather
 	// than just the public ones.
@@ -178,32 +145,10 @@ type Config struct {
 	// private APIs to untrusted users is a major security risk.
 	WSExposeAll bool `toml:",omitempty"`
 
-	// GraphQLCors is the Cross-Origin Resource Sharing header to send to requesting
-	// clients. Please be aware that CORS is a browser enforced security, it's fully
-	// useless for custom HTTP clients.
-	GraphQLCors []string `toml:",omitempty"`
-
-	// GraphQLVirtualHosts is the list of virtual hostnames which are allowed on incoming requests.
-	// This is by default {'localhost'}. Using this prevents attacks like
-	// DNS rebinding, which bypasses SOP by simply masquerading as being within the same
-	// origin. These attacks do not utilize CORS, since they are not cross-domain.
-	// By explicitly checking the Host-header, the server will not allow requests
-	// made against the server with a malicious host domain.
-	// Requests using ip address directly are not affected
-	GraphQLVirtualHosts []string `toml:",omitempty"`
-
 	// Logger is a custom logger to use with the p2p.Server.
 	Logger log.Logger `toml:",omitempty"`
 
-	staticNodesWarning     bool
-	trustedNodesWarning    bool
-	oldGethResourceWarning bool
-
-	// AllowUnprotectedTxs allows non EIP-155 protected transactions to be send over RPC.
-	AllowUnprotectedTxs bool `toml:",omitempty"`
-
-	// JWTSecret is the hex-encoded jwt secret.
-	JWTSecret string `toml:",omitempty"`
+	AnnounceTxs bool `toml:",omitempty"`
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -236,7 +181,7 @@ func (c *Config) NodeDB() string {
 	if c.DataDir == "" {
 		return "" // ephemeral
 	}
-	return c.ResolvePath(datadirNodeDatabase)
+	return c.resolvePath(datadirNodeDatabase)
 }
 
 // DefaultIPCEndpoint returns the IPC path used by default.
@@ -262,11 +207,11 @@ func (c *Config) HTTPEndpoint() string {
 
 // DefaultHTTPEndpoint returns the HTTP endpoint used by default.
 func DefaultHTTPEndpoint() string {
-	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort, AuthPort: DefaultAuthPort}
+	config := &Config{HTTPHost: DefaultHTTPHost, HTTPPort: DefaultHTTPPort}
 	return config.HTTPEndpoint()
 }
 
-// WSEndpoint resolves a websocket endpoint based on the configured host interface
+// WSEndpoint resolves an websocket endpoint based on the configured host interface
 // and port parameters.
 func (c *Config) WSEndpoint() string {
 	if c.WSHost == "" {
@@ -279,12 +224,6 @@ func (c *Config) WSEndpoint() string {
 func DefaultWSEndpoint() string {
 	config := &Config{WSHost: DefaultWSHost, WSPort: DefaultWSPort}
 	return config.WSEndpoint()
-}
-
-// ExtRPCEnabled returns the indicator whether node enables the external
-// RPC(http, ws or graphql).
-func (c *Config) ExtRPCEnabled() bool {
-	return c.HTTPHost != "" || c.WSHost != ""
 }
 
 // NodeName returns the devp2p node identifier.
@@ -321,12 +260,12 @@ var isOldGethResource = map[string]bool{
 	"chaindata":          true,
 	"nodes":              true,
 	"nodekey":            true,
-	"static-nodes.json":  false, // no warning for these because they have their
-	"trusted-nodes.json": false, // own separate warning.
+	"static-nodes.json":  true,
+	"trusted-nodes.json": true,
 }
 
-// ResolvePath resolves path in the instance directory.
-func (c *Config) ResolvePath(path string) string {
+// resolvePath resolves path in the instance directory.
+func (c *Config) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
@@ -335,15 +274,13 @@ func (c *Config) ResolvePath(path string) string {
 	}
 	// Backwards-compatibility: ensure that data directory files created
 	// by geth 1.4 are used if they exist.
-	if warn, isOld := isOldGethResource[path]; isOld {
+	if c.name() == "geth" && isOldGethResource[path] {
 		oldpath := ""
-		if c.name() == "geth" {
+		if c.Name == "geth" {
 			oldpath = filepath.Join(c.DataDir, path)
 		}
 		if oldpath != "" && common.FileExist(oldpath) {
-			if warn {
-				c.warnOnce(&c.oldGethResourceWarning, "Using deprecated resource file %s, please move this file to the 'geth' subdirectory of datadir.", oldpath)
-			}
+			// TODO: print warning
 			return oldpath
 		}
 	}
@@ -374,7 +311,7 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 		return key
 	}
 
-	keyfile := c.ResolvePath(datadirPrivateKey)
+	keyfile := c.resolvePath(datadirPrivateKey)
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
 		return key
 	}
@@ -396,18 +333,18 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 }
 
 // StaticNodes returns a list of node enode URLs configured as static nodes.
-func (c *Config) StaticNodes() []*enode.Node {
-	return c.parsePersistentNodes(&c.staticNodesWarning, c.ResolvePath(datadirStaticNodes))
+func (c *Config) StaticNodes() []*discover.Node {
+	return c.parsePersistentNodes(c.resolvePath(datadirStaticNodes))
 }
 
 // TrustedNodes returns a list of node enode URLs configured as trusted nodes.
-func (c *Config) TrustedNodes() []*enode.Node {
-	return c.parsePersistentNodes(&c.trustedNodesWarning, c.ResolvePath(datadirTrustedNodes))
+func (c *Config) TrustedNodes() []*discover.Node {
+	return c.parsePersistentNodes(c.resolvePath(datadirTrustedNodes))
 }
 
 // parsePersistentNodes parses a list of discovery node URLs loaded from a .json
 // file from within the data directory.
-func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
+func (c *Config) parsePersistentNodes(path string) []*discover.Node {
 	// Short circuit if no node config is present
 	if c.DataDir == "" {
 		return nil
@@ -415,21 +352,19 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
-
 	// Load the nodes from the config file.
 	var nodelist []string
 	if err := common.LoadJSON(path, &nodelist); err != nil {
-		log.Error(fmt.Sprintf("Can't load node list file: %v", err))
+		log.Error(fmt.Sprintf("Can't load node file %s: %v", path, err))
 		return nil
 	}
 	// Interpret the list as a discovery node array
-	var nodes []*enode.Node
+	var nodes []*discover.Node
 	for _, url := range nodelist {
 		if url == "" {
 			continue
 		}
-		node, err := enode.Parse(enode.ValidSchemes, url)
+		node, err := discover.ParseNode(url)
 		if err != nil {
 			log.Error(fmt.Sprintf("Node URL %s: %v\n", url, err))
 			continue
@@ -439,8 +374,15 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	return nodes
 }
 
-// KeyDirConfig determines the settings for keydirectory
-func (c *Config) KeyDirConfig() (string, error) {
+// AccountConfig determines the settings for scrypt and keydirectory
+func (c *Config) AccountConfig() (int, int, string, error) {
+	scryptN := keystore.StandardScryptN
+	scryptP := keystore.StandardScryptP
+	if c.UseLightweightKDF {
+		scryptN = keystore.LightScryptN
+		scryptP = keystore.LightScryptP
+	}
+
 	var (
 		keydir string
 		err    error
@@ -457,46 +399,41 @@ func (c *Config) KeyDirConfig() (string, error) {
 	case c.KeyStoreDir != "":
 		keydir, err = filepath.Abs(c.KeyStoreDir)
 	}
-	return keydir, err
+	return scryptN, scryptP, keydir, err
 }
 
-// getKeyStoreDir retrieves the key directory and will create
-// and ephemeral one if necessary.
-func getKeyStoreDir(conf *Config) (string, bool, error) {
-	keydir, err := conf.KeyDirConfig()
-	if err != nil {
-		return "", false, err
-	}
-	isEphemeral := false
+func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
+	scryptN, scryptP, keydir, err := conf.AccountConfig()
+	var ephemeral string
 	if keydir == "" {
 		// There is no datadir.
 		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
-		isEphemeral = true
+		ephemeral = keydir
 	}
 
 	if err != nil {
-		return "", false, err
+		return nil, "", err
 	}
 	if err := os.MkdirAll(keydir, 0700); err != nil {
-		return "", false, err
+		return nil, "", err
 	}
-
-	return keydir, isEphemeral, nil
-}
-
-var warnLock sync.Mutex
-
-func (c *Config) warnOnce(w *bool, format string, args ...interface{}) {
-	warnLock.Lock()
-	defer warnLock.Unlock()
-
-	if *w {
-		return
+	// Assemble the account manager and supported backends
+	backends := []accounts.Backend{
+		keystore.NewKeyStore(keydir, scryptN, scryptP),
 	}
-	l := c.Logger
-	if l == nil {
-		l = log.Root()
+	if !conf.NoUSB {
+		// Start a USB hub for Ledger hardware wallets
+		if ledgerhub, err := usbwallet.NewLedgerHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Ledger hub, disabling: %v", err))
+		} else {
+			backends = append(backends, ledgerhub)
+		}
+		// Start a USB hub for Trezor hardware wallets
+		if trezorhub, err := usbwallet.NewTrezorHub(); err != nil {
+			log.Warn(fmt.Sprintf("Failed to start Trezor hub, disabling: %v", err))
+		} else {
+			backends = append(backends, trezorhub)
+		}
 	}
-	l.Warn(fmt.Sprintf(format, args...))
-	*w = true
+	return accounts.NewManager(backends...), ephemeral, nil
 }

@@ -21,56 +21,33 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/event"
 )
-
-// managerSubBufferSize determines how many incoming wallet events
-// the manager will buffer in its channel.
-const managerSubBufferSize = 50
-
-// Config contains the settings of the global account manager.
-//
-// TODO(rjl493456442, karalabe, holiman): Get rid of this when account management
-// is removed in favor of Clef.
-type Config struct {
-	InsecureUnlockAllowed bool // Whether account unlocking in insecure environment is allowed
-}
-
-// newBackendEvent lets the manager know it should
-// track the given backend for wallet updates.
-type newBackendEvent struct {
-	backend   Backend
-	processed chan struct{} // Informs event emitter that backend has been integrated
-}
 
 // Manager is an overarching account manager that can communicate with various
 // backends for signing transactions.
 type Manager struct {
-	config      *Config                    // Global account manager configurations
-	backends    map[reflect.Type][]Backend // Index of backends currently registered
-	updaters    []event.Subscription       // Wallet update subscriptions for all backends
-	updates     chan WalletEvent           // Subscription sink for backend wallet changes
-	newBackends chan newBackendEvent       // Incoming backends to be tracked by the manager
-	wallets     []Wallet                   // Cache of all wallets from all registered backends
+	backends map[reflect.Type][]Backend // Index of backends currently registered
+	updaters []event.Subscription       // Wallet update subscriptions for all backends
+	updates  chan WalletEvent           // Subscription sink for backend wallet changes
+	wallets  []Wallet                   // Cache of all wallets from all registered backends
 
 	feed event.Feed // Wallet feed notifying of arrivals/departures
 
 	quit chan chan error
-	term chan struct{} // Channel is closed upon termination of the update loop
 	lock sync.RWMutex
 }
 
 // NewManager creates a generic account manager to sign transaction via various
 // supported backends.
-func NewManager(config *Config, backends ...Backend) *Manager {
+func NewManager(backends ...Backend) *Manager {
 	// Retrieve the initial list of wallets from the backends and sort by URL
 	var wallets []Wallet
 	for _, backend := range backends {
 		wallets = merge(wallets, backend.Wallets()...)
 	}
 	// Subscribe to wallet notifications from all backends
-	updates := make(chan WalletEvent, managerSubBufferSize)
+	updates := make(chan WalletEvent, 4*len(backends))
 
 	subs := make([]event.Subscription, len(backends))
 	for i, backend := range backends {
@@ -78,14 +55,11 @@ func NewManager(config *Config, backends ...Backend) *Manager {
 	}
 	// Assemble the account manager and return
 	am := &Manager{
-		config:      config,
-		backends:    make(map[reflect.Type][]Backend),
-		updaters:    subs,
-		updates:     updates,
-		newBackends: make(chan newBackendEvent),
-		wallets:     wallets,
-		quit:        make(chan chan error),
-		term:        make(chan struct{}),
+		backends: make(map[reflect.Type][]Backend),
+		updaters: subs,
+		updates:  updates,
+		wallets:  wallets,
+		quit:     make(chan chan error),
 	}
 	for _, backend := range backends {
 		kind := reflect.TypeOf(backend)
@@ -101,19 +75,6 @@ func (am *Manager) Close() error {
 	errc := make(chan error)
 	am.quit <- errc
 	return <-errc
-}
-
-// Config returns the configuration of account manager.
-func (am *Manager) Config() *Config {
-	return am.config
-}
-
-// AddBackend starts the tracking of an additional backend for wallet updates.
-// cmd/geth assumes once this func returns the backends have been already integrated.
-func (am *Manager) AddBackend(backend Backend) {
-	done := make(chan struct{})
-	am.newBackends <- newBackendEvent{backend, done}
-	<-done
 }
 
 // update is the wallet event loop listening for notifications from the backends
@@ -145,22 +106,10 @@ func (am *Manager) update() {
 
 			// Notify any listeners of the event
 			am.feed.Send(event)
-		case event := <-am.newBackends:
-			am.lock.Lock()
-			// Update caches
-			backend := event.backend
-			am.wallets = merge(am.wallets, backend.Wallets()...)
-			am.updaters = append(am.updaters, backend.Subscribe(am.updates))
-			kind := reflect.TypeOf(backend)
-			am.backends[kind] = append(am.backends[kind], backend)
-			am.lock.Unlock()
-			close(event.processed)
+
 		case errc := <-am.quit:
 			// Manager terminating, return
 			errc <- nil
-			// Signals event emitters the loop is not receiving values
-			// to prevent them from getting stuck.
-			close(am.term)
 			return
 		}
 	}
@@ -168,9 +117,6 @@ func (am *Manager) update() {
 
 // Backends retrieves the backend(s) with the given type from the account manager.
 func (am *Manager) Backends(kind reflect.Type) []Backend {
-	am.lock.RLock()
-	defer am.lock.RUnlock()
-
 	return am.backends[kind]
 }
 
@@ -179,11 +125,6 @@ func (am *Manager) Wallets() []Wallet {
 	am.lock.RLock()
 	defer am.lock.RUnlock()
 
-	return am.walletsNoLock()
-}
-
-// walletsNoLock returns all registered wallets. Callers must hold am.lock.
-func (am *Manager) walletsNoLock() []Wallet {
 	cpy := make([]Wallet, len(am.wallets))
 	copy(cpy, am.wallets)
 	return cpy
@@ -198,26 +139,12 @@ func (am *Manager) Wallet(url string) (Wallet, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, wallet := range am.walletsNoLock() {
+	for _, wallet := range am.Wallets() {
 		if wallet.URL() == parsed {
 			return wallet, nil
 		}
 	}
 	return nil, ErrUnknownWallet
-}
-
-// Accounts returns all account addresses of all wallets within the account manager
-func (am *Manager) Accounts() []common.Address {
-	am.lock.RLock()
-	defer am.lock.RUnlock()
-
-	addresses := make([]common.Address, 0) // return [] instead of nil if empty
-	for _, wallet := range am.wallets {
-		for _, account := range wallet.Accounts() {
-			addresses = append(addresses, account.Address)
-		}
-	}
-	return addresses
 }
 
 // Find attempts to locate the wallet corresponding to a specific account. Since

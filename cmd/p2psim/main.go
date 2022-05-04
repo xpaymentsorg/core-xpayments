@@ -47,7 +47,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/p2p"
-	"github.com/xpaymentsorg/go-xpayments/p2p/enode"
+	"github.com/xpaymentsorg/go-xpayments/p2p/discover"
 	"github.com/xpaymentsorg/go-xpayments/p2p/simulations"
 	"github.com/xpaymentsorg/go-xpayments/p2p/simulations/adapters"
 	"github.com/xpaymentsorg/go-xpayments/rpc"
@@ -180,10 +180,7 @@ func main() {
 			},
 		},
 	}
-	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	app.Run(os.Args)
 }
 
 func showNetwork(ctx *cli.Context) error {
@@ -278,18 +275,19 @@ func createNode(ctx *cli.Context) error {
 	if len(ctx.Args()) != 0 {
 		return cli.ShowCommandHelp(ctx, ctx.Command.Name)
 	}
-	config := adapters.RandomNodeConfig()
-	config.Name = ctx.String("name")
+	config := &adapters.NodeConfig{
+		Name: ctx.String("name"),
+	}
 	if key := ctx.String("key"); key != "" {
 		privKey, err := crypto.HexToECDSA(key)
 		if err != nil {
 			return err
 		}
-		config.ID = enode.PubkeyToIDV4(&privKey.PublicKey)
+		config.ID = discover.PubkeyID(&privKey.PublicKey)
 		config.PrivateKey = privKey
 	}
 	if services := ctx.String("services"); services != "" {
-		config.Lifecycles = strings.Split(services, ",")
+		config.Services = strings.Split(services, ",")
 	}
 	node, err := client.CreateNode(config)
 	if err != nil {
