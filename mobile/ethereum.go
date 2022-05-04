@@ -67,7 +67,6 @@ func (msg *CallMsg) SetData(data []byte)       { msg.msg.Data = common.CopyBytes
 func (msg *CallMsg) SetTo(address *Address) {
 	if address == nil {
 		msg.msg.To = nil
-		return
 	}
 	msg.msg.To = &address.address
 }
@@ -78,21 +77,11 @@ type SyncProgress struct {
 	progress ethereum.SyncProgress
 }
 
-func (p *SyncProgress) GetStartingBlock() int64       { return int64(p.progress.StartingBlock) }
-func (p *SyncProgress) GetCurrentBlock() int64        { return int64(p.progress.CurrentBlock) }
-func (p *SyncProgress) GetHighestBlock() int64        { return int64(p.progress.HighestBlock) }
-func (p *SyncProgress) GetSyncedAccounts() int64      { return int64(p.progress.SyncedAccounts) }
-func (p *SyncProgress) GetSyncedAccountBytes() int64  { return int64(p.progress.SyncedAccountBytes) }
-func (p *SyncProgress) GetSyncedBytecodes() int64     { return int64(p.progress.SyncedBytecodes) }
-func (p *SyncProgress) GetSyncedBytecodeBytes() int64 { return int64(p.progress.SyncedBytecodeBytes) }
-func (p *SyncProgress) GetSyncedStorage() int64       { return int64(p.progress.SyncedStorage) }
-func (p *SyncProgress) GetSyncedStorageBytes() int64  { return int64(p.progress.SyncedStorageBytes) }
-func (p *SyncProgress) GetHealedTrienodes() int64     { return int64(p.progress.HealedTrienodes) }
-func (p *SyncProgress) GetHealedTrienodeBytes() int64 { return int64(p.progress.HealedTrienodeBytes) }
-func (p *SyncProgress) GetHealedBytecodes() int64     { return int64(p.progress.HealedBytecodes) }
-func (p *SyncProgress) GetHealedBytecodeBytes() int64 { return int64(p.progress.HealedBytecodeBytes) }
-func (p *SyncProgress) GetHealingTrienodes() int64    { return int64(p.progress.HealingTrienodes) }
-func (p *SyncProgress) GetHealingBytecode() int64     { return int64(p.progress.HealingBytecode) }
+func (p *SyncProgress) GetStartingBlock() int64 { return int64(p.progress.StartingBlock) }
+func (p *SyncProgress) GetCurrentBlock() int64  { return int64(p.progress.CurrentBlock) }
+func (p *SyncProgress) GetHighestBlock() int64  { return int64(p.progress.HighestBlock) }
+func (p *SyncProgress) GetPulledStates() int64  { return int64(p.progress.PulledStates) }
+func (p *SyncProgress) GetKnownStates() int64   { return int64(p.progress.KnownStates) }
 
 // Topics is a set of topic lists to filter events with.
 type Topics struct{ topics [][]common.Hash }
@@ -136,12 +125,12 @@ func (t *Topics) Append(topics *Hashes) {
 	t.topics = append(t.topics, topics.hashes)
 }
 
-// FilterQuery contains options for contract log filtering.
+// FilterQuery contains options for contact log filtering.
 type FilterQuery struct {
 	query ethereum.FilterQuery
 }
 
-// NewFilterQuery creates an empty filter query for contract log filtering.
+// NewFilterQuery creates an empty filter query for contact log filtering.
 func NewFilterQuery() *FilterQuery {
 	return new(FilterQuery)
 }

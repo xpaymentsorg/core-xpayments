@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 
 	"github.com/xpaymentsorg/go-xpayments/cmd/evm/internal/compiler"
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 var compileCommand = cli.Command{

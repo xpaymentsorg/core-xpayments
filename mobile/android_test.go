@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cespare/cp"
+	"github.com/xpaymentsorg/go-xpayments/internal/build"
 )
 
 // androidTestClass is a Java class to do some lightweight tests against the Android
@@ -212,7 +212,7 @@ func TestAndroid(t *testing.T) {
 		t.Logf("%s", output)
 		t.Fatalf("failed to run gomobile bind: %v", err)
 	}
-	cp.CopyFile(filepath.Join("libs", "geth.aar"), "geth.aar")
+	build.CopyFile(filepath.Join("libs", "geth.aar"), "geth.aar", os.ModePerm)
 
 	if err = ioutil.WriteFile(filepath.Join("src", "androidTest", "java", "org", "ethereum", "gethtest", "AndroidTest.java"), []byte(androidTestClass), os.ModePerm); err != nil {
 		t.Fatalf("failed to write Android test class: %v", err)

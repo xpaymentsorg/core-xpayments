@@ -17,12 +17,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/xpaymentsorg/go-xpayments/log"
 )
@@ -36,6 +38,7 @@ func makeWizard(network string) *wizard {
 		},
 		servers:  make(map[string]*sshClient),
 		services: make(map[string][]string),
+		in:       bufio.NewReader(os.Stdin),
 	}
 }
 
@@ -58,14 +61,14 @@ func (w *wizard) run() {
 	// Make sure we have a good network name to work with	fmt.Println()
 	// Docker accepts hyphens in image names, but doesn't like it for container names
 	if w.network == "" {
-		fmt.Println("Please specify a network name to administer (no spaces, hyphens or capital letters please)")
+		fmt.Println("Please specify a network name to administer (no spaces or hyphens, please)")
 		for {
 			w.network = w.readString()
-			if !strings.Contains(w.network, " ") && !strings.Contains(w.network, "-") && strings.ToLower(w.network) == w.network {
+			if !strings.Contains(w.network, " ") && !strings.Contains(w.network, "-") {
 				fmt.Printf("\nSweet, you can set this via --network=%s next time!\n\n", w.network)
 				break
 			}
-			log.Error("I also like to live dangerously, still no spaces, hyphens or capital letters")
+			log.Error("I also like to live dangerously, still no spaces or hyphens")
 		}
 	}
 	log.Info("Administering Ethereum network", "name", w.network)
@@ -79,17 +82,25 @@ func (w *wizard) run() {
 	} else if err := json.Unmarshal(blob, &w.conf); err != nil {
 		log.Crit("Previous configuration corrupted", "path", w.conf.path, "err", err)
 	} else {
-		// Dial all previously known servers
+		// Dial all previously known servers concurrently
+		var pend sync.WaitGroup
 		for server, pubkey := range w.conf.Servers {
-			log.Info("Dialing previously configured server", "server", server)
-			client, err := dial(server, pubkey)
-			if err != nil {
-				log.Error("Previous server unreachable", "server", server, "err", err)
-			}
-			w.lock.Lock()
-			w.servers[server] = client
-			w.lock.Unlock()
+			pend.Add(1)
+
+			go func(server string, pubkey []byte) {
+				defer pend.Done()
+
+				log.Info("Dialing previously configured server", "server", server)
+				client, err := dial(server, pubkey)
+				if err != nil {
+					log.Error("Previous server unreachable", "server", server, "err", err)
+				}
+				w.lock.Lock()
+				w.servers[server] = client
+				w.lock.Unlock()
+			}(server, pubkey)
 		}
+		pend.Wait()
 		w.networkStats()
 	}
 	// Basics done, loop ad infinitum about what to do
@@ -120,20 +131,7 @@ func (w *wizard) run() {
 
 		case choice == "2":
 			if w.conf.Genesis == nil {
-				fmt.Println()
-				fmt.Println("What would you like to do? (default = create)")
-				fmt.Println(" 1. Create new genesis from scratch")
-				fmt.Println(" 2. Import already existing genesis")
-
-				choice := w.read()
-				switch {
-				case choice == "" || choice == "1":
-					w.makeGenesis()
-				case choice == "2":
-					w.importGenesis()
-				default:
-					log.Error("That's not something I can do")
-				}
+				w.makeGenesis()
 			} else {
 				w.manageGenesis()
 			}
@@ -151,6 +149,7 @@ func (w *wizard) run() {
 			} else {
 				w.manageComponents()
 			}
+
 		default:
 			log.Error("That's not something I can do")
 		}
