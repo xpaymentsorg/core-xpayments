@@ -1,4 +1,4 @@
-package XDPoS
+package XPoS
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ func TestGetM1M2FromCheckpointHeader(t *testing.T) {
 	}
 	epoch := uint64(900)
 	config := &params.ChainConfig{
-		XDPoS: &params.XDPoSConfig{
+		XPoS: &params.XPoSConfig{
 			Epoch: uint64(epoch),
 		},
 	}

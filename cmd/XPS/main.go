@@ -28,7 +28,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/cmd/utils"
 	"github.com/xpaymentsorg/go-xpayments/common"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/console"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/eth"
@@ -41,14 +41,14 @@ import (
 )
 
 const (
-	clientIdentifier = "XDC" // Client identifier to advertise over the network
+	clientIdentifier = "XPS" // Client identifier to advertise over the network
 )
 
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the XDCchain command line interface")
+	app = utils.NewApp(gitCommit, "the xPaymentsChain command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -110,7 +110,7 @@ var (
 		//utils.TestnetFlag,
 		//utils.RinkebyFlag,
 		//utils.VMEnableDebugFlag,
-		utils.XDCTestnetFlag,
+		utils.XPSTestnetFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.RPCVirtualHostsFlag,
@@ -149,10 +149,10 @@ var (
 )
 
 func init() {
-	// Initialize the CLI app and start XDC
-	app.Action = XDC
+	// Initialize the CLI app and start XPS
+	app.Action = XPS
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright (c) 2018 XDCchain"
+	app.Copyright = "Copyright (c) 2021-2022 xPaymentsChain"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -206,10 +206,10 @@ func main() {
 	}
 }
 
-// XDC is the main entry point into the system if no special subcommand is ran.
+// XPS is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func XDC(ctx *cli.Context) error {
+func XPS(ctx *cli.Context) error {
 	node, cfg := makeFullNode(ctx)
 	startNode(ctx, node, cfg)
 	node.Wait()
@@ -219,7 +219,7 @@ func XDC(ctx *cli.Context) error {
 // startNode boots up the system node and all registered protocols, after which
 // it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
-func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
+func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
 	// Start up the node itself
 	utils.StartNode(stack)
 
@@ -290,7 +290,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XDCConfig) {
 	if err := stack.Service(&ethereum); err != nil {
 		utils.Fatalf("Ethereum service not running: %v", err)
 	}
-	if _, ok := ethereum.Engine().(*XDPoS.XDPoS); ok {
+	if _, ok := ethereum.Engine().(*XPoS.XPoS); ok {
 		go func() {
 			started := false
 			ok := false

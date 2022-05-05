@@ -68,7 +68,7 @@ const (
 	SWARM_ENV_ENS_ADDR        = "SWARM_ENS_ADDR"
 	SWARM_ENV_CORS            = "SWARM_CORS"
 	SWARM_ENV_BOOTNODES       = "SWARM_BOOTNODES"
-	XDC_ENV_DATADIR           = "XDC_DATADIR"
+	XPS_ENV_DATADIR           = "XPS_DATADIR"
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -114,7 +114,7 @@ func initSwarmNode(config *bzzapi.Config, stack *node.Node, ctx *cli.Context) {
 	//at this point, all vars should be set in the Config
 	//get the account for the provided swarm account
 	prvkey := getAccount(config.BzzAccount, ctx, stack)
-	//set the resolved config path (XDC --datadir)
+	//set the resolved config path (XPS --datadir)
 	config.Path = stack.InstanceDir()
 	//finally, initialize the configuration
 	config.Init(prvkey)
@@ -241,7 +241,7 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		}
 	}
 
-	if datadir := os.Getenv(XDC_ENV_DATADIR); datadir != "" {
+	if datadir := os.Getenv(XPS_ENV_DATADIR); datadir != "" {
 		currentConfig.Path = datadir
 	}
 

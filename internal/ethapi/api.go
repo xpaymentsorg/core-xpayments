@@ -34,7 +34,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/common/math"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/contracts"
 	contractValidator "github.com/xpaymentsorg/go-xpayments/contracts/validator/contract"
@@ -685,15 +685,15 @@ func (s *PublicBlockChainAPI) GetMasternodes(ctx context.Context, b *types.Block
 		if prevBlockNumber >= latestBlockNumber || !s.b.ChainConfig().IsTIP2019(b.Number()) {
 			prevBlockNumber = curBlockNumber
 		}
-		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		if engine, ok := s.b.GetEngine().(*XPoS.XPoS); ok {
 			// Get block epoc latest.
-			lastCheckpointNumber := prevBlockNumber - (prevBlockNumber % s.b.ChainConfig().XDPoS.Epoch)
+			lastCheckpointNumber := prevBlockNumber - (prevBlockNumber % s.b.ChainConfig().XPoS.Epoch)
 			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(lastCheckpointNumber))
 			if prevCheckpointBlock != nil {
-				masternodes = engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().XDPoS.Epoch)
+				masternodes = engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), curBlockNumber, s.b.ChainConfig().XPoS.Epoch)
 			}
 		} else {
-			log.Error("Undefined XDPoS consensus engine")
+			log.Error("Undefined XPoS consensus engine")
 		}
 	}
 	return masternodes, nil
@@ -708,7 +708,7 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		err                      error
 	)
 	block = s.b.CurrentBlock()
-	epoch := s.b.ChainConfig().XDPoS.Epoch
+	epoch := s.b.ChainConfig().XPoS.Epoch
 	// TODO: we currently support the latest epoch only
 	//if epochNumber == rpc.LatestEpochNumber {
 	//	block = s.b.CurrentBlock()
@@ -740,14 +740,14 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		return "", err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
-	validator, err := contractValidator.NewXDCValidator(addr, client)
+	validator, err := contractValidator.NewXPSValidator(addr, client)
 	if err != nil {
 		return "", err
 	}
 	opts := new(bind.CallOpts)
 	var (
 		candidateAddresses []common.Address
-		candidates         []XDPoS.Masternode
+		candidates         []XPoS.Masternode
 	)
 
 	candidateAddresses, err = validator.GetCandidates(opts)
@@ -759,8 +759,8 @@ func (s *PublicBlockChainAPI) GetCandidateStatus(ctx context.Context, coinbaseAd
 		if err != nil {
 			return "", err
 		}
-		if address.String() != "xdc0000000000000000000000000000000000000000" {
-			candidates = append(candidates, XDPoS.Masternode{Address: address, Stake: v})
+		if address.String() != "xps0000000000000000000000000000000000000000" {
+			candidates = append(candidates, XPoS.Masternode{Address: address, Stake: v})
 		}
 	}
 	// sort candidates by stake descending
@@ -1077,12 +1077,12 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 		if signedBlockNumber >= latestBlockNumber.Uint64() || !s.b.ChainConfig().IsTIP2019(b.Number()) {
 			signedBlockNumber = blockNumber
 		}
-		if engine, ok := s.b.GetEngine().(*XDPoS.XDPoS); ok {
+		if engine, ok := s.b.GetEngine().(*XPoS.XPoS); ok {
 			// Get block epoc latest.
-			lastCheckpointNumber := signedBlockNumber - (signedBlockNumber % s.b.ChainConfig().XDPoS.Epoch)
+			lastCheckpointNumber := signedBlockNumber - (signedBlockNumber % s.b.ChainConfig().XPoS.Epoch)
 			prevCheckpointBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(lastCheckpointNumber))
 			if prevCheckpointBlock != nil {
-				masternodes := engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), blockNumber, s.b.ChainConfig().XDPoS.Epoch)
+				masternodes := engine.GetMasternodesFromCheckpointHeader(prevCheckpointBlock.Header(), blockNumber, s.b.ChainConfig().XPoS.Epoch)
 				signedBlock, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(signedBlockNumber))
 				if s.b.ChainConfig().IsTIPSigning(latestBlockNumber) {
 					signers, err = GetSignersFromBlocks(s.b, signedBlock.NumberU64(), signedBlock.Hash(), masternodes)
@@ -1109,7 +1109,7 @@ func (s *PublicBlockChainAPI) rpcOutputBlockSigners(b *types.Block, ctx context.
 				}
 			}
 		} else {
-			log.Error("Undefined XDPoS consensus engine")
+			log.Error("Undefined XPoS consensus engine")
 		}
 	}
 	return filterSigners, nil
@@ -1753,8 +1753,8 @@ func GetSignersFromBlocks(b Backend, blockNumber uint64, blockHash common.Hash, 
 	for _, node := range masternodes {
 		mapMN[node] = true
 	}
-	if engine, ok := b.GetEngine().(*XDPoS.XDPoS); ok {
-		limitNumber := blockNumber - blockNumber%b.ChainConfig().XDPoS.Epoch + 2*b.ChainConfig().XDPoS.Epoch - 1
+	if engine, ok := b.GetEngine().(*XPoS.XPoS); ok {
+		limitNumber := blockNumber - blockNumber%b.ChainConfig().XPoS.Epoch + 2*b.ChainConfig().XPoS.Epoch - 1
 		currentNumber := b.CurrentBlock().NumberU64()
 		if limitNumber > currentNumber {
 			limitNumber = currentNumber

@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-package XDPoS
+package XPoS
 
 import (
 	"github.com/xpaymentsorg/go-xpayments/common"
@@ -26,7 +26,7 @@ import (
 // mechanisms of the proof-of-authority scheme.
 type API struct {
 	chain consensus.ChainReader
-	XDPoS *XDPoS
+	XPoS  *XPoS
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
@@ -42,7 +42,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
@@ -51,7 +51,7 @@ func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 }
 
 // GetSigners retrieves the list of authorized signers at the specified block.
@@ -67,7 +67,7 @@ func (api *API) GetSigners(number *rpc.BlockNumber) ([]common.Address, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.XDPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.XPoS.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +89,11 @@ func (api *API) GetSignersAtHash(hash common.Hash) ([]common.Address, error) {
 
 // Proposals returns the current proposals the node tries to uphold and vote on.
 func (api *API) Proposals() map[common.Address]bool {
-	api.XDPoS.lock.RLock()
-	defer api.XDPoS.lock.RUnlock()
+	api.XPoS.lock.RLock()
+	defer api.XPoS.lock.RUnlock()
 
 	proposals := make(map[common.Address]bool)
-	for address, auth := range api.XDPoS.proposals {
+	for address, auth := range api.XPoS.proposals {
 		proposals[address] = auth
 	}
 	return proposals

@@ -33,7 +33,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/mclock"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	contractValidator "github.com/xpaymentsorg/go-xpayments/contracts/validator/contract"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
@@ -507,8 +507,8 @@ func (bc *BlockChain) insert(block *types.Block) {
 	bc.currentBlock.Store(block)
 
 	// save cache BlockSigners
-	if bc.chainConfig.XDPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
-		engine := bc.Engine().(*XDPoS.XDPoS)
+	if bc.chainConfig.XPoS != nil && !bc.chainConfig.IsTIPSigning(block.Number()) {
+		engine := bc.Engine().(*XPoS.XPoS)
 		engine.CacheData(block.Header(), block.Transactions(), bc.GetReceiptsByHash(block.Hash()))
 	}
 
@@ -1020,8 +1020,8 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		bc.insert(block)
 	}
 	// save cache BlockSigners
-	if bc.chainConfig.XDPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
-		engine := bc.Engine().(*XDPoS.XDPoS)
+	if bc.chainConfig.XPoS != nil && bc.chainConfig.IsTIPSigning(block.Number()) {
+		engine := bc.Engine().(*XPoS.XPoS)
 		engine.CacheSigner(block.Header().Hash(), block.Transactions())
 	}
 	bc.futureBlocks.Remove(block.Hash())
@@ -1219,13 +1219,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks) (int, []interface{}, []*ty
 		stats.processed++
 		stats.usedGas += usedGas
 		stats.report(chain, i, bc.stateCache.TrieDB().Size())
-		if status == CanonStatTy && bc.chainConfig.XDPoS != nil {
+		if status == CanonStatTy && bc.chainConfig.XPoS != nil {
 			// epoch block
-			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+			if (chain[i].NumberU64() % bc.chainConfig.XPoS.Epoch) == 0 {
 				CheckpointCh <- 1
 			}
 			// prepare set of masternodes for the next epoch
-			if (chain[i].NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
+			if (chain[i].NumberU64() % bc.chainConfig.XPoS.Epoch) == (bc.chainConfig.XPoS.Epoch - bc.chainConfig.XPoS.Gap) {
 				err := bc.UpdateM1()
 				if err != nil {
 					log.Crit("Error when update masternodes set. Stopping node", "err", err)
@@ -1419,13 +1419,13 @@ func (bc *BlockChain) insertBlock(block *types.Block) ([]interface{}, []*types.L
 	stats.processed++
 	stats.usedGas += result.usedGas
 	stats.report(types.Blocks{block}, 0, bc.stateCache.TrieDB().Size())
-	if status == CanonStatTy && bc.chainConfig.XDPoS != nil {
+	if status == CanonStatTy && bc.chainConfig.XPoS != nil {
 		// epoch block
-		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == 0 {
+		if (block.NumberU64() % bc.chainConfig.XPoS.Epoch) == 0 {
 			CheckpointCh <- 1
 		}
 		// prepare set of masternodes for the next epoch
-		if (block.NumberU64() % bc.chainConfig.XDPoS.Epoch) == (bc.chainConfig.XDPoS.Epoch - bc.chainConfig.XDPoS.Gap) {
+		if (block.NumberU64() % bc.chainConfig.XPoS.Epoch) == (bc.chainConfig.XPoS.Epoch - bc.chainConfig.XPoS.Gap) {
 			err := bc.UpdateM1()
 			if err != nil {
 				log.Error("Error when update masternodes set. Stopping node", "err", err)
@@ -1826,10 +1826,10 @@ func (bc *BlockChain) GetClient() (*ethclient.Client, error) {
 }
 
 func (bc *BlockChain) UpdateM1() error {
-	if bc.Config().XDPoS == nil {
-		return ErrNotXDPoS
+	if bc.Config().XPoS == nil {
+		return ErrNotXPoS
 	}
-	engine := bc.Engine().(*XDPoS.XDPoS)
+	engine := bc.Engine().(*XPoS.XPoS)
 	log.Info("It's time to update new set of masternodes for the next epoch...")
 	// get masternodes information from smart contract
 	client, err := bc.GetClient()
@@ -1837,7 +1837,7 @@ func (bc *BlockChain) UpdateM1() error {
 		return err
 	}
 	addr := common.HexToAddress(common.MasternodeVotingSMC)
-	validator, err := contractValidator.NewXDCValidator(addr, client)
+	validator, err := contractValidator.NewXPSValidator(addr, client)
 	if err != nil {
 		return err
 	}
@@ -1846,15 +1846,15 @@ func (bc *BlockChain) UpdateM1() error {
 	if err != nil {
 		return err
 	}
-	var ms []XDPoS.Masternode
+	var ms []XPoS.Masternode
 	for _, candidate := range candidates {
 		v, err := validator.GetCandidateCap(opts, candidate)
 		if err != nil {
 			return err
 		}
 		//TODO: smart contract shouldn't return "0x0000000000000000000000000000000000000000"
-		if candidate.String() != "xdc0000000000000000000000000000000000000000" {
-			ms = append(ms, XDPoS.Masternode{Address: candidate, Stake: v})
+		if candidate.String() != "xps0000000000000000000000000000000000000000" {
+			ms = append(ms, XPoS.Masternode{Address: candidate, Stake: v})
 		}
 	}
 	if len(ms) == 0 {

@@ -32,11 +32,11 @@ import (
 var (
 	walletCommand = cli.Command{
 		Name:      "wallet",
-		Usage:     "Manage XDCchain presale wallets",
+		Usage:     "Manage xPaymentsChain presale wallets",
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
-    XDC wallet import /path/to/my/presale.wallet
+    XPS wallet import /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -45,7 +45,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 			{
 
 				Name:      "import",
-				Usage:     "Import XDCchain presale wallet",
+				Usage:     "Import XPSchain presale wallet",
 				ArgsUsage: "<keyFile>",
 				Action:    utils.MigrateFlags(importWallet),
 				Category:  "ACCOUNT COMMANDS",
@@ -56,7 +56,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-	XDC wallet [options] /path/to/my/presale.wallet
+	XPS wallet [options] /path/to/my/presale.wallet
 
 will prompt for your password and imports your ether presale account.
 It can be used non-interactively with the --password option taking a
@@ -112,7 +112,7 @@ Print a short summary of all accounts`,
 					utils.LightKDFFlag,
 				},
 				Description: `
-    XDC account new
+    XPS account new
 
 Creates a new account and prints the address.
 
@@ -137,7 +137,7 @@ password to file or expose in any other way.
 					utils.LightKDFFlag,
 				},
 				Description: `
-    XDC account update <address>
+    XPS account update <address>
 
 Update an existing account.
 
@@ -149,7 +149,7 @@ format to the newest format or change the password for an account.
 
 For non-interactive use the passphrase can be specified with the --password flag:
 
-    XDC account update [options] <address>
+    XPS account update [options] <address>
 
 Since only one password can be given, only format update can be performed,
 changing your password is only possible interactively.
@@ -167,7 +167,7 @@ changing your password is only possible interactively.
 				},
 				ArgsUsage: "<keyFile>",
 				Description: `
-    XDC account import <keyfile>
+    XPS account import <keyfile>
 
 Imports an unencrypted private key from <keyfile> and creates a new account.
 Prints the address.
@@ -180,7 +180,7 @@ You must remember this passphrase to unlock your account in the future.
 
 For non-interactive use the passphrase can be specified with the -password flag:
 
-    XDC account import [options] <keyfile>
+    XPS account import [options] <keyfile>
 
 Note:
 As you can directly copy your encrypted accounts to another ethereum instance,
@@ -291,7 +291,7 @@ func ambiguousAddrRecovery(ks *keystore.KeyStore, err *keystore.AmbiguousAddrErr
 
 // accountCreate creates a new account into the keystore defined by the CLI flags.
 func accountCreate(ctx *cli.Context) error {
-	cfg := XDCConfig{Node: defaultNodeConfig()}
+	cfg := XPSConfig{Node: defaultNodeConfig()}
 	// Load config file.
 	if file := ctx.GlobalString(configFileFlag.Name); file != "" {
 		if err := loadConfig(file, &cfg); err != nil {
@@ -312,7 +312,7 @@ func accountCreate(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
 	}
-	fmt.Printf("Address: {xdc%x}\n", address)
+	fmt.Printf("Address: {xps%x}\n", address)
 	return nil
 }
 
@@ -353,7 +353,7 @@ func importWallet(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
-	fmt.Printf("Address: {xdc%x}\n", acct.Address)
+	fmt.Printf("Address: {xps%x}\n", acct.Address)
 	return nil
 }
 
@@ -374,6 +374,6 @@ func accountImport(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("Could not create the account: %v", err)
 	}
-	fmt.Printf("Address: {xdc%x}\n", acct.Address)
+	fmt.Printf("Address: {xps%x}\n", acct.Address)
 	return nil
 }

@@ -2,22 +2,22 @@ FROM golang:1.10-alpine as builder
 
 RUN apk add --no-cache make gcc musl-dev linux-headers
 
-ADD . /XDCchain
-RUN cd /XDCchain && make XDC
+ADD . /XPSchain
+RUN cd /XPSchain && make XPS
 
 FROM alpine:latest
 
 LABEL maintainer="anil@xinfin.org"
 
-WORKDIR /XDCchain
+WORKDIR /XPSchain
 
-COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
+COPY --from=builder /XPSchain/build/bin/XPS /usr/local/bin/XPS
 
-RUN chmod +x /usr/local/bin/XDC
+RUN chmod +x /usr/local/bin/XPS
 
 EXPOSE 8545
 EXPOSE 30303
 
-ENTRYPOINT ["/usr/local/bin/XDC"]
+ENTRYPOINT ["/usr/local/bin/XPS"]
 
 CMD ["--help"]

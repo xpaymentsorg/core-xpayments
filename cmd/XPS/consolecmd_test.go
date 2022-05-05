@@ -40,25 +40,25 @@ const (
 func TestConsoleWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 
-	// Start a XDC console, make sure it's cleaned up and terminate the console
-	XDC := runXDC(t,
+	// Start a XPS console, make sure it's cleaned up and terminate the console
+	XPS := runXPS(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase,
 		"console")
 
 	// Gather all the infos the welcome message needs to contain
-	XDC.SetTemplateFunc("goos", func() string { return runtime.GOOS })
-	XDC.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
-	XDC.SetTemplateFunc("gover", runtime.Version)
-	XDC.SetTemplateFunc("XDCver", func() string { return params.Version })
-	XDC.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
-	XDC.SetTemplateFunc("apis", func() string { return ipcAPIs })
+	XPS.SetTemplateFunc("goos", func() string { return runtime.GOOS })
+	XPS.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
+	XPS.SetTemplateFunc("gover", runtime.Version)
+	XPS.SetTemplateFunc("XPSver", func() string { return params.Version })
+	XPS.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
+	XPS.SetTemplateFunc("apis", func() string { return ipcAPIs })
 
 	// Verify the actual welcome message to the required template
-	XDC.Expect(`
-Welcome to the XDC JavaScript console!
+	XPS.Expect(`
+Welcome to the XPS JavaScript console!
 
-instance: XDC/v{{XDCver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: XPS/v{{XPSver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{.Etherbase}}
 at block: 0 ({{niltime}})
  datadir: {{.Datadir}}
@@ -66,7 +66,7 @@ at block: 0 ({{niltime}})
 
 > {{.InputLine "exit"}}
 `)
-	XDC.ExpectExit()
+	XPS.ExpectExit()
 }
 
 // Tests that a console can be attached to a running node via various means.
@@ -75,55 +75,55 @@ func TestIPCAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	var ipc string
 	if runtime.GOOS == "windows" {
-		ipc = `\\.\pipe\XDC` + strconv.Itoa(trulyRandInt(100000, 999999))
+		ipc = `\\.\pipe\XPS` + strconv.Itoa(trulyRandInt(100000, 999999))
 	} else {
 		ws := tmpdir(t)
 		defer os.RemoveAll(ws)
-		ipc = filepath.Join(ws, "XDC.ipc")
+		ipc = filepath.Join(ws, "XPS.ipc")
 	}
-	XDC := runXDC(t,
+	XPS := runXPS(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ipcpath", ipc)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, XDC, "ipc:"+ipc, ipcAPIs)
+	testAttachWelcome(t, XPS, "ipc:"+ipc, ipcAPIs)
 
-	XDC.Interrupt()
-	XDC.ExpectExit()
+	XPS.Interrupt()
+	XPS.ExpectExit()
 }
 
 func TestHTTPAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
-	XDC := runXDC(t,
+	XPS := runXPS(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--rpc", "--rpcport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, XDC, "http://localhost:"+port, httpAPIs)
+	testAttachWelcome(t, XPS, "http://localhost:"+port, httpAPIs)
 
-	XDC.Interrupt()
-	XDC.ExpectExit()
+	XPS.Interrupt()
+	XPS.ExpectExit()
 }
 
 func TestWSAttachWelcome(t *testing.T) {
 	coinbase := "0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"
 	port := strconv.Itoa(trulyRandInt(1024, 65536)) // Yeah, sometimes this will fail, sorry :P
 
-	XDC := runXDC(t,
+	XPS := runXPS(t,
 		"--port", "0", "--maxpeers", "0", "--nodiscover", "--nat", "none",
 		"--etherbase", coinbase, "--ws", "--wsport", port)
 
 	time.Sleep(2 * time.Second) // Simple way to wait for the RPC endpoint to open
-	testAttachWelcome(t, XDC, "ws://localhost:"+port, httpAPIs)
+	testAttachWelcome(t, XPS, "ws://localhost:"+port, httpAPIs)
 
-	XDC.Interrupt()
-	XDC.ExpectExit()
+	XPS.Interrupt()
+	XPS.ExpectExit()
 }
 
-func testAttachWelcome(t *testing.T, XDC *testXDC, endpoint, apis string) {
-	// Attach to a running XDC note and terminate immediately
-	attach := runXDC(t, "attach", endpoint)
+func testAttachWelcome(t *testing.T, XPS *testXPS, endpoint, apis string) {
+	// Attach to a running XPS note and terminate immediately
+	attach := runXPS(t, "attach", endpoint)
 	defer attach.ExpectExit()
 	attach.CloseStdin()
 
@@ -131,18 +131,18 @@ func testAttachWelcome(t *testing.T, XDC *testXDC, endpoint, apis string) {
 	attach.SetTemplateFunc("goos", func() string { return runtime.GOOS })
 	attach.SetTemplateFunc("goarch", func() string { return runtime.GOARCH })
 	attach.SetTemplateFunc("gover", runtime.Version)
-	attach.SetTemplateFunc("XDCver", func() string { return params.Version })
-	attach.SetTemplateFunc("etherbase", func() string { return XDC.Etherbase })
+	attach.SetTemplateFunc("XPSver", func() string { return params.Version })
+	attach.SetTemplateFunc("etherbase", func() string { return XPS.Etherbase })
 	attach.SetTemplateFunc("niltime", func() string { return time.Unix(0, 0).Format(time.RFC1123) })
 	attach.SetTemplateFunc("ipc", func() bool { return strings.HasPrefix(endpoint, "ipc") })
-	attach.SetTemplateFunc("datadir", func() string { return XDC.Datadir })
+	attach.SetTemplateFunc("datadir", func() string { return XPS.Datadir })
 	attach.SetTemplateFunc("apis", func() string { return apis })
 
 	// Verify the actual welcome message to the required template
 	attach.Expect(`
-Welcome to the XDC JavaScript console!
+Welcome to the XPS JavaScript console!
 
-instance: XDC/v{{XDCver}}/{{goos}}-{{goarch}}/{{gover}}
+instance: XPS/v{{XPSver}}/{{goos}}-{{goarch}}/{{gover}}
 coinbase: {{etherbase}}
 at block: 0 ({{niltime}}){{if ipc}}
  datadir: {{datadir}}{{end}}

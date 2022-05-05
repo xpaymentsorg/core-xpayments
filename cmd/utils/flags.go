@@ -33,7 +33,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/fdlimit"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
@@ -112,7 +112,7 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
-	// XDC flags.
+	// XPS flags.
 	RollbackFlag = cli.StringFlag{
 		Name:  "rollback",
 		Usage: "Rollback chain at hash",
@@ -142,16 +142,16 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 89=XDCchain)",
+		Usage: "Network identifier (integer, 89=XPSchain)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
 		Name:  "testnet",
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
-	XDCTestnetFlag = cli.BoolFlag{
-		Name:  "XDC-testnet",
-		Usage: "XDC test network",
+	XPSTestnetFlag = cli.BoolFlag{
+		Name:  "XPS-testnet",
+		Usage: "XPS test network",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -748,7 +748,7 @@ func setIPC(ctx *cli.Context, cfg *node.Config) {
 }
 
 // MakeDatabaseHandles raises out the number of allowed file handles per process
-// for XDC and returns half of the allowance to assign to the database.
+// for XPS and returns half of the allowance to assign to the database.
 func MakeDatabaseHandles() int {
 	limit, err := fdlimit.Current()
 	if err != nil {
@@ -780,7 +780,7 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	log.Warn("-------------------------------------------------------------------")
 	log.Warn("Referring to accounts by order in the keystore folder is dangerous!")
 	log.Warn("This functionality is deprecated and will be removed in the future!")
-	log.Warn("Please use explicit addresses! (can search via `XDC account list`)")
+	log.Warn("Please use explicit addresses! (can search via `XPS account list`)")
 	log.Warn("-------------------------------------------------------------------")
 
 	accs := ks.Accounts()
@@ -1093,7 +1093,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.EnablePreimageRecording = ctx.GlobalBool(VMEnableDebugFlag.Name)
 	}
 	if ctx.GlobalIsSet(StoreRewardFlag.Name) {
-		common.StoreRewardFolder = filepath.Join(stack.DataDir(), "XDC", "rewards")
+		common.StoreRewardFolder = filepath.Join(stack.DataDir(), "XPS", "rewards")
 		if _, err := os.Stat(common.StoreRewardFolder); os.IsNotExist(err) {
 			os.Mkdir(common.StoreRewardFolder, os.ModePerm)
 		}
@@ -1248,8 +1248,8 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 		Fatalf("%v", err)
 	}
 	var engine consensus.Engine
-	if config.XDPoS != nil {
-		engine = XDPoS.New(config.XDPoS, chainDb)
+	if config.XPoS != nil {
+		engine = XPoS.New(config.XPoS, chainDb)
 	} else {
 		engine = ethash.NewFaker()
 		if !ctx.GlobalBool(FakePoWFlag.Name) {
@@ -1262,7 +1262,7 @@ func MakeChain(ctx *cli.Context, stack *node.Node) (chain *core.BlockChain, chai
 				DatasetsOnDisk: eth.DefaultConfig.Ethash.DatasetsOnDisk,
 			})
 		}
-		Fatalf("Only support XDPoS consensus")
+		Fatalf("Only support XPoS consensus")
 	}
 	if gcmode := ctx.GlobalString(GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
 		Fatalf("--%s must be either 'full' or 'archive'", GCModeFlag.Name)
@@ -1304,11 +1304,11 @@ func MakeConsolePreloads(ctx *cli.Context) []string {
 // This is a temporary function used for migrating old command/flags to the
 // new format.
 //
-// e.g. XDC account new --keystore /tmp/mykeystore --lightkdf
+// e.g. XPS account new --keystore /tmp/mykeystore --lightkdf
 //
 // is equivalent after calling this method with:
 //
-// XDC --keystore /tmp/mykeystore --lightkdf account new
+// XPS --keystore /tmp/mykeystore --lightkdf account new
 //
 // This allows the use of the existing configuration functionality.
 // When all flags are migrated this function can be removed and the existing

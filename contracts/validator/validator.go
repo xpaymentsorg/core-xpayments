@@ -24,18 +24,18 @@ import (
 )
 
 type Validator struct {
-	*contract.XDCValidatorSession
+	*contract.XPSValidatorSession
 	contractBackend bind.ContractBackend
 }
 
 func NewValidator(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) (*Validator, error) {
-	validator, err := contract.NewXDCValidator(contractAddr, contractBackend)
+	validator, err := contract.NewXPSValidator(contractAddr, contractBackend)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Validator{
-		&contract.XDCValidatorSession{
+		&contract.XPSValidatorSession{
 			Contract:     validator,
 			TransactOpts: *transactOpts,
 		},
@@ -48,12 +48,12 @@ func DeployValidator(transactOpts *bind.TransactOpts, contractBackend bind.Contr
 	minDeposit.SetString("10000000000000000000000000", 10)
 	minVoterCap := new(big.Int)
 	minVoterCap.SetString("25000000000000000000000", 10)
-	// Deposit 50K XDC
-	// Min Voter Cap 10 XDC
+	// Deposit 50K XPS
+	// Min Voter Cap 10 XPS
 	// 150 masternodes
 	// Candidate Delay Withdraw 30 days = 1296000 blocks
 	// Voter Delay Withdraw 10 days = 432000 blocks
-	validatorAddr, _, _, err := contract.DeployXDCValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(18), big.NewInt(1296000), big.NewInt(432000))
+	validatorAddr, _, _, err := contract.DeployXPSValidator(transactOpts, contractBackend, validatorAddress, caps, ownerAddress, minDeposit, minVoterCap, big.NewInt(18), big.NewInt(1296000), big.NewInt(432000))
 	if err != nil {
 		return validatorAddr, nil, err
 	}

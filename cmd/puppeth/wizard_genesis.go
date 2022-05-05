@@ -58,10 +58,10 @@ func (w *wizard) makeGenesis() {
 	}
 	// Figure out which consensus engine to choose
 	fmt.Println()
-	fmt.Println("Which consensus engine to use? (default = XDPoS)")
+	fmt.Println("Which consensus engine to use? (default = XPoS)")
 	fmt.Println(" 1. Ethash - proof-of-work")
 	fmt.Println(" 2. Clique - proof-of-authority")
-	fmt.Println(" 3. XDPoS - delegated-proof-of-stake")
+	fmt.Println(" 3. XPoS - delegated-proof-of-stake")
 
 	choice := w.read()
 	switch {
@@ -110,18 +110,18 @@ func (w *wizard) makeGenesis() {
 
 	case choice == "" || choice == "3":
 		genesis.Difficulty = big.NewInt(1)
-		genesis.Config.XDPoS = &params.XDPoSConfig{
+		genesis.Config.XPoS = &params.XPoSConfig{
 			Period: 15,
 			Epoch:  30000,
 			Reward: 0,
 		}
 		fmt.Println()
 		fmt.Println("How many seconds should blocks take? (default = 2)")
-		genesis.Config.XDPoS.Period = uint64(w.readDefaultInt(2))
+		genesis.Config.XPoS.Period = uint64(w.readDefaultInt(2))
 
 		fmt.Println()
-		fmt.Println("How many XDC should be rewarded to masternode? (default = 5000)")
-		genesis.Config.XDPoS.Reward = uint64(w.readDefaultInt(5000))
+		fmt.Println("How many XPS should be rewarded to masternode? (default = 5000)")
+		genesis.Config.XPoS.Reward = uint64(w.readDefaultInt(5000))
 
 		fmt.Println()
 		fmt.Println("Who own the first masternodes? (mandatory)")
@@ -161,16 +161,16 @@ func (w *wizard) makeGenesis() {
 		fmt.Println()
 		fmt.Println("How many blocks per epoch? (default = 900)")
 		epochNumber := uint64(w.readDefaultInt(900))
-		genesis.Config.XDPoS.Epoch = epochNumber
-		genesis.Config.XDPoS.RewardCheckpoint = epochNumber
+		genesis.Config.XPoS.Epoch = epochNumber
+		genesis.Config.XPoS.RewardCheckpoint = epochNumber
 
 		fmt.Println()
 		fmt.Println("How many blocks before checkpoint need to prepare new set of masternodes? (default = 450)")
-		genesis.Config.XDPoS.Gap = uint64(w.readDefaultInt(450))
+		genesis.Config.XPoS.Gap = uint64(w.readDefaultInt(450))
 
 		fmt.Println()
-		fmt.Println("What is foundation wallet address? (default = xdc746249C61f5832C5eEd53172776b460491bDcd5C)")
-		genesis.Config.XDPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
+		fmt.Println("What is foundation wallet address? (default = xps746249C61f5832C5eEd53172776b460491bDcd5C)")
+		genesis.Config.XPoS.FoudationWalletAddr = w.readDefaultAddress(common.HexToAddress(common.FoudationAddr))
 
 		// Validator Smart Contract Code
 		pKey, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -310,10 +310,10 @@ func (w *wizard) makeGenesis() {
 		}
 
 		fmt.Println()
-		fmt.Println("What is swap wallet address for fund 37.47Billion XDC?")
+		fmt.Println("What is swap wallet address for fund 500Million XPS?")
 		swapAddr := *w.readAddress()
 		baseBalance := big.NewInt(0) // 14.5Billion
-		baseBalance.Add(baseBalance, big.NewInt(3747*1000*1000*10))
+		baseBalance.Add(baseBalance, big.NewInt(50000*1000*10))
 		baseBalance.Mul(baseBalance, big.NewInt(1000000000000000000))
 		genesis.Alloc[swapAddr] = core.GenesisAccount{
 			Balance: baseBalance,

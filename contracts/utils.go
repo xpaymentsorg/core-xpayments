@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XPSchain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -35,7 +35,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/contracts/blocksigner/contract"
 	randomizeContract "github.com/xpaymentsorg/go-xpayments/contracts/randomize/contract"
 	"github.com/xpaymentsorg/go-xpayments/core"
@@ -62,7 +62,7 @@ var TxSignMu sync.RWMutex
 func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database) error {
 	TxSignMu.Lock()
 	defer TxSignMu.Unlock()
-	if chainConfig.XDPoS != nil {
+	if chainConfig.XPoS != nil {
 		// Find active account.
 		account := accounts.Account{}
 		var wallet accounts.Wallet
@@ -90,7 +90,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 
 		// Create secret tx.
 		blockNumber := block.Number().Uint64()
-		checkNumber := blockNumber % chainConfig.XDPoS.Epoch
+		checkNumber := blockNumber % chainConfig.XPoS.Epoch
 		// Generate random private key and save into chaindb.
 		randomizeKeyName := []byte("randomizeKey")
 		exist, _ := chainDb.Has(randomizeKeyName)
@@ -100,7 +100,7 @@ func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, m
 			// Only process when private key empty in state db.
 			// Save randomize key into state db.
 			randomizeKeyValue := RandStringByte(32)
-			tx, err := BuildTxSecretRandomize(nonce+1, common.HexToAddress(common.RandomizeSMC), chainConfig.XDPoS.Epoch, randomizeKeyValue)
+			tx, err := BuildTxSecretRandomize(nonce+1, common.HexToAddress(common.RandomizeSMC), chainConfig.XPoS.Epoch, randomizeKeyValue)
 			if err != nil {
 				log.Error("Fail to get tx opening for randomize", "error", err)
 				return err
@@ -220,7 +220,7 @@ func GetSignersByExecutingEVM(addrBlockSigner common.Address, client bind.Contra
 
 // Get random from randomize contract.
 func GetRandomizeFromContract(client bind.ContractBackend, addrMasternode common.Address) (int64, error) {
-	randomize, err := randomizeContract.NewXDCRandomize(common.HexToAddress(common.RandomizeSMC), client)
+	randomize, err := randomizeContract.NewXPSRandomize(common.HexToAddress(common.RandomizeSMC), client)
 	if err != nil {
 		log.Error("Fail to get instance of randomize", "error", err)
 	}
@@ -268,7 +268,7 @@ func BuildValidatorFromM2(listM2 []int64) []byte {
 	var validatorBytes []byte
 	for _, numberM2 := range listM2 {
 		// Convert number to byte.
-		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), XDPoS.M2ByteLength)
+		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), XPoS.M2ByteLength)
 		validatorBytes = append(validatorBytes, m2Byte...)
 	}
 
@@ -282,7 +282,7 @@ func DecodeValidatorsHexData(validatorsStr string) ([]int64, error) {
 		return nil, err
 	}
 
-	return XDPoS.ExtractValidatorsFromBytes(validatorsByte), nil
+	return XPoS.ExtractValidatorsFromBytes(validatorsByte), nil
 }
 
 // Decrypt randomize from secrets and opening.
@@ -307,7 +307,7 @@ func DecryptRandomizeFromSecretsAndOpening(secrets [][32]byte, opening [32]byte)
 }
 
 // Calculate reward for reward checkpoint.
-func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header *types.Header, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
+func GetRewardForCheckpoint(c *XPoS.XPoS, chain consensus.ChainReader, header *types.Header, rCheckpoint uint64, totalSigner *uint64) (map[common.Address]*rewardLog, error) {
 	// Not reward for singer of genesis block and only calculate reward at checkpoint block.
 	number := header.Number.Uint64()
 	prevCheckpoint := number - (rCheckpoint * 2)
@@ -340,7 +340,7 @@ func GetRewardForCheckpoint(c *XDPoS.XDPoS, chain consensus.ChainReader, header 
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
-	masternodes := XDPoS.GetMasternodesFromCheckpointHeader(header)
+	masternodes := XPoS.GetMasternodesFromCheckpointHeader(header)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
 		if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {

@@ -31,7 +31,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/contracts"
 	"github.com/xpaymentsorg/go-xpayments/core"
@@ -206,8 +206,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	// Set global ipc endpoint.
 	eth.blockchain.IPCEndpoint = ctx.GetConfig().IPCEndpoint()
 
-	if eth.chainConfig.XDPoS != nil {
-		c := eth.engine.(*XDPoS.XDPoS)
+	if eth.chainConfig.XPoS != nil {
+		c := eth.engine.(*XPoS.XPoS)
 		signHook := func(block *types.Block) error {
 			eb, err := eth.Etherbase()
 			if err != nil {
@@ -247,7 +247,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return block, false, err
 				}
 				header := block.Header()
-				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, XDPoS.SigHash(header).Bytes())
+				sighash, err := wallet.SignHash(accounts.Account{Address: eb}, XPoS.SigHash(header).Bytes())
 				if err != nil || sighash == nil {
 					log.Error("Can't get signature hash of m2", "sighash", sighash, "err", err)
 					return block, false, err
@@ -279,7 +279,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 			if canonicalState == nil || err != nil {
 				log.Crit("Can't get state at head of canonical chain", "head number", eth.blockchain.CurrentHeader().Number.Uint64(), "err", err)
 			}
-			prevEpoc := blockNumberEpoc - chain.Config().XDPoS.Epoch
+			prevEpoc := blockNumberEpoc - chain.Config().XPoS.Epoch
 			if prevEpoc >= 0 {
 				start := time.Now()
 				prevHeader := chain.GetHeaderByNumber(prevEpoc)
@@ -321,23 +321,23 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 
 		// Hook scans for bad masternodes and decide to penalty them
 		c.HookPenaltyTIPSigning = func(chain consensus.ChainReader, header *types.Header, candidates []common.Address) ([]common.Address, error) {
-			prevEpoc := header.Number.Uint64() - chain.Config().XDPoS.Epoch
+			prevEpoc := header.Number.Uint64() - chain.Config().XPoS.Epoch
 			combackEpoch := uint64(0)
-			comebackLength := (common.LimitPenaltyEpoch + 1) * chain.Config().XDPoS.Epoch
+			comebackLength := (common.LimitPenaltyEpoch + 1) * chain.Config().XPoS.Epoch
 			if header.Number.Uint64() > comebackLength {
 				combackEpoch = header.Number.Uint64() - comebackLength
 			}
 			if prevEpoc >= 0 {
 				start := time.Now()
 
-				listBlockHash := make([]common.Hash, chain.Config().XDPoS.Epoch)
+				listBlockHash := make([]common.Hash, chain.Config().XPoS.Epoch)
 
 				// get list block hash & stats total created block
 				statMiners := make(map[common.Address]int)
 				listBlockHash[0] = header.ParentHash
 				parentnumber := header.Number.Uint64() - 1
 				parentHash := header.ParentHash
-				for i := uint64(1); i < chain.Config().XDPoS.Epoch; i++ {
+				for i := uint64(1); i < chain.Config().XPoS.Epoch; i++ {
 					parentHeader := chain.GetHeader(parentHash, parentnumber)
 					miner, _ := c.RecoverSigner(parentHeader)
 					value, exist := statMiners[miner]
@@ -436,8 +436,8 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				log.Crit("Can't get state at head of canonical chain", "head number", header.Number.Uint64(), "err", err)
 			}
 			number := header.Number.Uint64()
-			rCheckpoint := chain.Config().XDPoS.RewardCheckpoint
-			foundationWalletAddr := chain.Config().XDPoS.FoudationWalletAddr
+			rCheckpoint := chain.Config().XPoS.RewardCheckpoint
+			foundationWalletAddr := chain.Config().XPoS.FoudationWalletAddr
 			if foundationWalletAddr == (common.Address{}) {
 				log.Error("Foundation Wallet Address is empty", "error", foundationWalletAddr)
 				return err, nil
@@ -447,7 +447,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 				start := time.Now()
 				// Get signers in blockSigner smartcontract.
 				// Get reward inflation.
-				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XDPoS.Reward), new(big.Int).SetUint64(params.Ether))
+				chainReward := new(big.Int).Mul(new(big.Int).SetUint64(chain.Config().XPoS.Reward), new(big.Int).SetUint64(params.Ether))
 				chainReward = rewardInflation(chainReward, number, common.BlocksPerYear)
 
 				totalSigner := new(uint64)
@@ -495,7 +495,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 					return err
 				}
 				if !bytes.Equal(header.Validators, validators) {
-					return XDPoS.ErrInvalidCheckpointValidators
+					return XPoS.ErrInvalidCheckpointValidators
 				}
 			}
 			return nil
@@ -530,7 +530,7 @@ func makeExtraData(extra []byte) []byte {
 		// create default extradata
 		extra, _ = rlp.EncodeToBytes([]interface{}{
 			uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch),
-			"XDC",
+			"XPS",
 			runtime.Version(),
 			runtime.GOOS,
 		})
@@ -557,8 +557,8 @@ func CreateDB(ctx *node.ServiceContext, config *Config, name string) (ethdb.Data
 // CreateConsensusEngine creates the required type of consensus engine instance for an Ethereum service
 func CreateConsensusEngine(ctx *node.ServiceContext, config *ethash.Config, chainConfig *params.ChainConfig, db ethdb.Database) consensus.Engine {
 	// If delegated-proof-of-stake is requested, set it up
-	if chainConfig.XDPoS != nil {
-		return XDPoS.New(chainConfig.XDPoS, db)
+	if chainConfig.XPoS != nil {
+		return XPoS.New(chainConfig.XPoS, db)
 	}
 
 	// Otherwise assume proof-of-work
@@ -685,9 +685,9 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if s.chainConfig.XDPoS != nil {
+	if s.chainConfig.XPoS != nil {
 		//check if miner's wallet is in set of validators
-		c := s.engine.(*XDPoS.XDPoS)
+		c := s.engine.(*XPoS.XPoS)
 		snap, err := c.GetSnapshot(s.blockchain, s.blockchain.CurrentHeader())
 		if err != nil {
 			return false, fmt.Errorf("Can't verify masternode permission: %v", err)
@@ -697,7 +697,7 @@ func (s *Ethereum) ValidateMasternode() (bool, error) {
 			return false, nil
 		}
 	} else {
-		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
+		return false, fmt.Errorf("Only verify masternode permission in XPoS protocol")
 	}
 	return true, nil
 }
@@ -708,8 +708,8 @@ func (s *Ethereum) ValidateMasternodeTestnet() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if s.chainConfig.XDPoS == nil {
-		return false, fmt.Errorf("Only verify masternode permission in XDPoS protocol")
+	if s.chainConfig.XPoS == nil {
+		return false, fmt.Errorf("Only verify masternode permission in XPoS protocol")
 	}
 	masternodes := []common.Address{
 		common.HexToAddress("0xfFC679Dcdf444D2eEb0491A998E7902B411CcF20"),
@@ -730,13 +730,13 @@ func (s *Ethereum) StartStaking(local bool) error {
 		log.Error("Cannot start mining without etherbase", "err", err)
 		return fmt.Errorf("etherbase missing: %v", err)
 	}
-	if XDPoS, ok := s.engine.(*XDPoS.XDPoS); ok {
+	if XPoS, ok := s.engine.(*XPoS.XPoS); ok {
 		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 		if wallet == nil || err != nil {
 			log.Error("Etherbase account unavailable locally", "err", err)
 			return fmt.Errorf("signer missing: %v", err)
 		}
-		XDPoS.Authorize(eb, wallet.SignHash)
+		XPoS.Authorize(eb, wallet.SignHash)
 	}
 	if local {
 		// If local (CPU) mining is started, we can disable the transaction rejection
@@ -823,8 +823,8 @@ func (s *Ethereum) Stop() error {
 }
 
 func GetValidators(bc *core.BlockChain, masternodes []common.Address) ([]byte, error) {
-	if bc.Config().XDPoS == nil {
-		return nil, core.ErrNotXDPoS
+	if bc.Config().XPoS == nil {
+		return nil, core.ErrNotXPoS
 	}
 	client, err := bc.GetClient()
 	if err != nil {

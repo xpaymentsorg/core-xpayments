@@ -88,7 +88,7 @@ type Bootnodes struct {
 	Testnet []string
 }
 
-type XDCConfig struct {
+type XPSConfig struct {
 	Eth         eth.Config
 	Shh         whisper.Config
 	Node        node.Config
@@ -101,7 +101,7 @@ type XDCConfig struct {
 	NAT         string
 }
 
-func loadConfig(file string, cfg *XDCConfig) error {
+func loadConfig(file string, cfg *XPSConfig) error {
 	f, err := os.Open(file)
 	if err != nil {
 		return err
@@ -121,13 +121,13 @@ func defaultNodeConfig() node.Config {
 	cfg.Version = params.VersionWithCommit(gitCommit)
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
 	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
-	cfg.IPCPath = "XDC.ipc"
+	cfg.IPCPath = "XPS.ipc"
 	return cfg
 }
 
-func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
+func makeConfigNode(ctx *cli.Context) (*node.Node, XPSConfig) {
 	// Load defaults.
-	cfg := XDCConfig{
+	cfg := XPSConfig{
 		Eth:         eth.DefaultConfig,
 		Shh:         whisper.DefaultConfig,
 		Node:        defaultNodeConfig(),
@@ -154,7 +154,7 @@ func makeConfigNode(ctx *cli.Context) (*node.Node, XDCConfig) {
 	}
 
 	// Check testnet is enable.
-	if ctx.GlobalBool(utils.XDCTestnetFlag.Name) {
+	if ctx.GlobalBool(utils.XPSTestnetFlag.Name) {
 		common.IsTestnet = true
 	}
 
@@ -225,7 +225,7 @@ func enableWhisper(ctx *cli.Context) bool {
 	return false
 }
 
-func makeFullNode(ctx *cli.Context) (*node.Node, XDCConfig) {
+func makeFullNode(ctx *cli.Context) (*node.Node, XPSConfig) {
 	stack, cfg := makeConfigNode(ctx)
 
 	utils.RegisterEthService(stack, &cfg.Eth)

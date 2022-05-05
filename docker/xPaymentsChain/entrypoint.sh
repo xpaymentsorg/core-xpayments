@@ -22,7 +22,7 @@ KEYSTORE_DIR="keystore"
 genesisPath=""
 params=""
 accountsCount=$(
-  XDC account list --datadir $DATA_DIR  --keystore $KEYSTORE_DIR \
+  XPS account list --datadir $DATA_DIR  --keystore $KEYSTORE_DIR \
   2> /dev/null \
   | wc -l
 )
@@ -56,7 +56,7 @@ if [[ ! -z $NETWORK_ID ]]; then
       ;;
     89 )
       genesisPath="testnet.json"
-      params="$params --XDC-testnet --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
+      params="$params --XPS-testnet --gcmode archive --rpcapi db,eth,net,web3,personal,debug"
       ;;
     90 )
       genesisPath="devnet.json"
@@ -69,9 +69,9 @@ if [[ ! -z $NETWORK_ID ]]; then
 fi
 
 # data dir
-if [[ ! -d $DATA_DIR/XDC ]]; then
+if [[ ! -d $DATA_DIR/XPS ]]; then
   echo "No blockchain data, creating genesis block."
-  XDC init $genesisPath --datadir $DATA_DIR 2> /dev/null
+  XPS init $genesisPath --datadir $DATA_DIR 2> /dev/null
 fi
 
 # identity
@@ -96,21 +96,21 @@ if [[ $accountsCount -le 0 ]]; then
   if [[ ! -z $PRIVATE_KEY ]]; then
     echo "Creating account from private key"
     echo "$PRIVATE_KEY" > ./private_key
-    XDC  account import ./private_key \
+    XPS  account import ./private_key \
       --datadir $DATA_DIR \
       --keystore $KEYSTORE_DIR \
       --password ./password
     rm ./private_key
   else
     echo "Creating new account"
-    XDC account new \
+    XPS account new \
       --datadir $DATA_DIR \
       --keystore $KEYSTORE_DIR \
       --password ./password
   fi
 fi
 account=$(
-  XDC account list --datadir $DATA_DIR  --keystore $KEYSTORE_DIR \
+  XPS account list --datadir $DATA_DIR  --keystore $KEYSTORE_DIR \
   2> /dev/null \
   | head -n 1 \
   | cut -d"{" -f 2 | cut -d"}" -f 1
@@ -166,7 +166,7 @@ echo "dump: $IDENTITY $account $BOOTNODES"
 
 set -x
 
-exec XDC $params \
+exec XPS $params \
   --verbosity $VERBOSITY \
   --datadir $DATA_DIR \
   --keystore $KEYSTORE_DIR \

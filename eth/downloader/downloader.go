@@ -1325,9 +1325,9 @@ func (d *Downloader) processFullSyncContent(height uint64) error {
 		if len(results) == 0 {
 			return nil
 		}
-		if d.blockchain.Config() != nil && d.blockchain.Config().XDPoS != nil {
-			epoch := d.blockchain.Config().XDPoS.Epoch
-			gap := d.blockchain.Config().XDPoS.Gap
+		if d.blockchain.Config() != nil && d.blockchain.Config().XPoS != nil {
+			epoch := d.blockchain.Config().XPoS.Epoch
+			gap := d.blockchain.Config().XPoS.Gap
 			inserts := []*fetchResult{}
 			for i := 0; i < len(results); i++ {
 				number := results[i].Header.Number.Uint64() % epoch

@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	dir          = flag.String("dir", "", "directory to XDCChain chaindata")
+	dir          = flag.String("dir", "", "directory to xPaymentsChain chaindata")
 	cacheSize    = flag.Int("size", 1000000, "LRU cache size")
 	sercureKey   = []byte("secure-key-")
 	nWorker      = runtime.NumCPU() / 2

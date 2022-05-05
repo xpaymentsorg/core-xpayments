@@ -28,7 +28,7 @@ import (
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XDPoS"
+	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/consensus/misc"
 	"github.com/xpaymentsorg/go-xpayments/contracts"
 	"github.com/xpaymentsorg/go-xpayments/core"
@@ -290,7 +290,7 @@ func (self *worker) update() {
 
 			// Handle ChainSideEvent
 		case ev := <-self.chainSideCh:
-			if self.config.XDPoS == nil {
+			if self.config.XPoS == nil {
 				self.uncleMu.Lock()
 				self.possibleUncles[ev.Block.Hash()] = ev.Block
 				self.uncleMu.Unlock()
@@ -308,7 +308,7 @@ func (self *worker) update() {
 				self.currentMu.Unlock()
 			} else {
 				// If we're mining, but nothing is being processed, wake on new transactions
-				if self.config.XDPoS != nil && self.config.XDPoS.Period == 0 {
+				if self.config.XPoS != nil && self.config.XPoS.Period == 0 {
 					self.commitNewWork()
 				}
 			}
@@ -330,7 +330,7 @@ func (self *worker) wait() {
 				continue
 			}
 			block := result.Block
-			if self.config.XDPoS != nil && block.NumberU64() >= self.config.XDPoS.Epoch && len(block.Validator()) == 0 {
+			if self.config.XPoS != nil && block.NumberU64() >= self.config.XPoS.Epoch && len(block.Validator()) == 0 {
 				self.mux.Post(core.NewMinedBlockEvent{Block: block})
 				continue
 			}
@@ -366,13 +366,13 @@ func (self *worker) wait() {
 			if stat == core.CanonStatTy {
 				events = append(events, core.ChainHeadEvent{Block: block})
 			}
-			if work.config.XDPoS != nil {
+			if work.config.XPoS != nil {
 				// epoch block
-				if (block.NumberU64() % work.config.XDPoS.Epoch) == 0 {
+				if (block.NumberU64() % work.config.XPoS.Epoch) == 0 {
 					core.CheckpointCh <- 1
 				}
 				// prepare set of masternodes for the next epoch
-				if (block.NumberU64() % work.config.XDPoS.Epoch) == (work.config.XDPoS.Epoch - work.config.XDPoS.Gap) {
+				if (block.NumberU64() % work.config.XPoS.Epoch) == (work.config.XPoS.Epoch - work.config.XPoS.Gap) {
 					err := self.chain.UpdateM1()
 					if err != nil {
 						log.Error("Error when update masternodes set. Stopping node", "err", err)
@@ -389,8 +389,8 @@ func (self *worker) wait() {
 				self.commitNewWork()
 			}
 
-			if self.config.XDPoS != nil {
-				c := self.engine.(*XDPoS.XDPoS)
+			if self.config.XPoS != nil {
+				c := self.engine.(*XPoS.XPoS)
 				snap, err := c.GetSnapshot(self.chain, block.Header())
 				if err != nil {
 					log.Error("Fail to get snapshot for sign tx signer.")
@@ -451,7 +451,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error
 		createdAt: time.Now(),
 	}
 
-	if self.config.XDPoS == nil {
+	if self.config.XPoS == nil {
 		// when 08 is processed ancestors contain 07 (quick block)
 		for _, ancestor := range self.chain.GetBlocksFromHash(parent.Hash(), 7) {
 			for _, uncle := range ancestor.Uncles() {
@@ -496,10 +496,10 @@ func (self *worker) commitNewWork() {
 	// Only try to commit new work if we are mining
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// check if we are right after parent's coinbase in the list
-		// only go with XDPoS
-		if self.config.XDPoS != nil {
+		// only go with XPoS
+		if self.config.XPoS != nil {
 			// get masternodes set from latest checkpoint
-			c := self.engine.(*XDPoS.XDPoS)
+			c := self.engine.(*XPoS.XPoS)
 			len, preIndex, curIndex, ok, err := c.YourTurn(self.chain, parent.Header(), self.coinbase)
 			if err != nil {
 				log.Warn("Failed when trying to commit new work", "err", err)
@@ -516,10 +516,10 @@ func (self *worker) commitNewWork() {
 					// you're not allowed to create this block
 					return
 				}
-				h := XDPoS.Hop(len, preIndex, curIndex)
+				h := XPoS.Hop(len, preIndex, curIndex)
 				gap := waitPeriod * int64(h)
 				// Check nearest checkpoint block in hop range.
-				nearest := self.config.XDPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XDPoS.Epoch)
+				nearest := self.config.XPoS.Epoch - (parent.Header().Number.Uint64() % self.config.XPoS.Epoch)
 				if uint64(h) >= nearest {
 					gap = waitPeriodCheckpoint * int64(h)
 				}
@@ -592,7 +592,7 @@ func (self *worker) commitNewWork() {
 		txs        *types.TransactionsByPriceAndNonce
 		specialTxs types.Transactions
 	)
-	if self.config.XDPoS != nil && header.Number.Uint64()%self.config.XDPoS.Epoch != 0 {
+	if self.config.XPoS != nil && header.Number.Uint64()%self.config.XPoS.Epoch != 0 {
 		pending, err := self.eth.TxPool().Pending()
 		if err != nil {
 			log.Error("Failed to fetch pending transactions", "err", err)
@@ -607,7 +607,7 @@ func (self *worker) commitNewWork() {
 		uncles    []*types.Header
 		badUncles []common.Hash
 	)
-	if self.config.XDPoS == nil {
+	if self.config.XPoS == nil {
 		for hash, uncle := range self.possibleUncles {
 			if len(uncles) == 2 {
 				break
@@ -681,7 +681,7 @@ func (env *Work) commitTransactions(mux *event.TypeMux, txs *types.TransactionsB
 				continue
 			}
 			blkNumber := binary.BigEndian.Uint64(tx.Data()[8:40])
-			if blkNumber >= env.header.Number.Uint64() || blkNumber <= env.header.Number.Uint64()-env.config.XDPoS.Epoch*2 {
+			if blkNumber >= env.header.Number.Uint64() || blkNumber <= env.header.Number.Uint64()-env.config.XPoS.Epoch*2 {
 				log.Trace("Data special transaction invalid number", "hash", tx.Hash(), "blkNumber", blkNumber, "miner", env.header.Number)
 				continue
 			}

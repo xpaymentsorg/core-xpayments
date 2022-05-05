@@ -30,11 +30,11 @@ import (
 const (
 	HashLength          = 32
 	AddressLength       = 20
-	MasternodeVotingSMC = "xdc0000000000000000000000000000000000000088"
-	BlockSigners        = "xdc0000000000000000000000000000000000000089"
-	RandomizeSMC        = "xdc0000000000000000000000000000000000000090"
-	FoudationAddr       = "xdc746249C61f5832C5eEd53172776b460491bDcd5C"
-	TeamAddr            = "xdc0000000000000000000000000000000000000099"
+	MasternodeVotingSMC = "xps0000000000000000000000000000000000000088"
+	BlockSigners        = "xps0000000000000000000000000000000000000089"
+	RandomizeSMC        = "xps0000000000000000000000000000000000000090"
+	FoudationAddr       = "xps746249C61f5832C5eEd53172776b460491bDcd5C"
+	TeamAddr            = "xps0000000000000000000000000000000000000099"
 	VoteMethod          = "0x6dd7d8ea"
 	UnvoteMethod        = "0x02aa9be2"
 	ProposeMethod       = "0x01267951"
@@ -160,7 +160,7 @@ func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
 func IsHexAddress(s string) bool {
-	if hasXDCPrefix(s) {
+	if hasXPSPrefix(s) {
 		s = s[3:]
 	}
 	if hasHexPrefix(s) {
@@ -194,7 +194,7 @@ func (a Address) Hex() string {
 			result[i] -= 32
 		}
 	}
-	return "xdc" + string(result)
+	return "xps" + string(result)
 }
 
 // String implements the stringer interface and is used also by the logger.
@@ -228,7 +228,7 @@ func (a *Address) Set(other Address) {
 
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
-	return hexutil.Bytes(a[:]).MarshalXDCText()
+	return hexutil.Bytes(a[:]).MarshalXPSText()
 }
 
 // UnmarshalText parses a hash in hex syntax.

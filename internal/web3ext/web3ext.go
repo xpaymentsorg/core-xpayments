@@ -21,7 +21,7 @@ var Modules = map[string]string{
 	"admin":      Admin_JS,
 	"chequebook": Chequebook_JS,
 	"clique":     Clique_JS,
-	"XDPoS":       XDPoS_JS,
+	"XPoS":       XPoS_JS,
 	"debug":      Debug_JS,
 	"eth":        Eth_JS,
 	"miner":      Miner_JS,
@@ -115,37 +115,37 @@ web3._extend({
 });
 `
 
-const XDPoS_JS = `
+const XPoS_JS = `
 web3._extend({
-	property: 'XDPoS',
+	property: 'XPoS',
 	methods: [
 		new web3._extend.Method({
 			name: 'getSnapshot',
-			call: 'XDPoS_getSnapshot',
+			call: 'XPoS_getSnapshot',
 			params: 1,
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getSnapshotAtHash',
-			call: 'XDPoS_getSnapshotAtHash',
+			call: 'XPoS_getSnapshotAtHash',
 			params: 1
 		}),
 		new web3._extend.Method({
 			name: 'getSigners',
-			call: 'XDPoS_getSigners',
+			call: 'XPoS_getSigners',
 			params: 1,
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getSignersAtHash',
-			call: 'XDPoS_getSignersAtHash',
+			call: 'XPoS_getSignersAtHash',
 			params: 1
 		}),
 	],
 	properties: [
 		new web3._extend.Property({
 			name: 'proposals',
-			getter: 'XDPoS_proposals'
+			getter: 'XPoS_proposals'
 		}),
 	]
 });

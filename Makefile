@@ -1,6 +1,6 @@
-.PHONY: XDC XDC-cross evm all test clean
-.PHONY: XDC-linux XDC-linux-386 XDC-linux-amd64 XDC-linux-mips64 XDC-linux-mips64le
-.PHONY: XDC-darwin XDC-darwin-386 XDC-darwin-amd64
+.PHONY: XPS XPS-cross evm all test clean
+.PHONY: XPS-linux XPS-linux-386 XPS-linux-amd64 XPS-linux-mips64 XPS-linux-mips64le
+.PHONY: XPS-darwin XPS-darwin-386 XPS-darwin-amd64
 
 GOBIN = $(shell pwd)/build/bin
 GOFMT = gofmt
@@ -10,10 +10,10 @@ GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.
 
 GIT = git
 
-XDC:
-	build/env.sh go run build/ci.go install ./cmd/XDC
+XPS:
+	build/env.sh go run build/ci.go install ./cmd/XPS
 	@echo "Done building."
-	@echo "Run \"$(GOBIN)/XDC\" to launch XDC."
+	@echo "Run \"$(GOBIN)/XPS\" to launch XPS."
 
 gc:
 	build/env.sh go run build/ci.go install ./cmd/gc
@@ -41,57 +41,57 @@ clean:
 
 # Cross Compilation Targets (xgo)
 
-XDC-cross: XDC-linux XDC-darwin
+XPS-cross: XPS-linux XPS-darwin
 	@echo "Full cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-*
+	@ls -ld $(GOBIN)/XPS-*
 
-XDC-linux: XDC-linux-386 XDC-linux-amd64 XDC-linux-mips64 XDC-linux-mips64le
+XPS-linux: XPS-linux-386 XPS-linux-amd64 XPS-linux-mips64 XPS-linux-mips64le
 	@echo "Linux cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-*
+	@ls -ld $(GOBIN)/XPS-linux-*
 
-XDC-linux-386:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/XDC
+XPS-linux-386:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/386 -v ./cmd/XPS
 	@echo "Linux 386 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep 386
+	@ls -ld $(GOBIN)/XPS-linux-* | grep 386
 
-XDC-linux-amd64:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/XDC
+XPS-linux-amd64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/amd64 -v ./cmd/XPS
 	@echo "Linux amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep amd64
+	@ls -ld $(GOBIN)/XPS-linux-* | grep amd64
 
-XDC-linux-mips:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/XDC
+XPS-linux-mips:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips --ldflags '-extldflags "-static"' -v ./cmd/XPS
 	@echo "Linux MIPS cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mips
+	@ls -ld $(GOBIN)/XPS-linux-* | grep mips
 
-XDC-linux-mipsle:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/XDC
+XPS-linux-mipsle:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mipsle --ldflags '-extldflags "-static"' -v ./cmd/XPS
 	@echo "Linux MIPSle cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mipsle
+	@ls -ld $(GOBIN)/XPS-linux-* | grep mipsle
 
-XDC-linux-mips64:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/XDC
+XPS-linux-mips64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64 --ldflags '-extldflags "-static"' -v ./cmd/XPS
 	@echo "Linux MIPS64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mips64
+	@ls -ld $(GOBIN)/XPS-linux-* | grep mips64
 
-XDC-linux-mips64le:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/XDC
+XPS-linux-mips64le:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=linux/mips64le --ldflags '-extldflags "-static"' -v ./cmd/XPS
 	@echo "Linux MIPS64le cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-linux-* | grep mips64le
+	@ls -ld $(GOBIN)/XPS-linux-* | grep mips64le
 
-XDC-darwin: XDC-darwin-386 XDC-darwin-amd64
+XPS-darwin: XPS-darwin-386 XPS-darwin-amd64
 	@echo "Darwin cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-darwin-*
+	@ls -ld $(GOBIN)/XPS-darwin-*
 
-XDC-darwin-386:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/XDC
+XPS-darwin-386:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/386 -v ./cmd/XPS
 	@echo "Darwin 386 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-darwin-* | grep 386
+	@ls -ld $(GOBIN)/XPS-darwin-* | grep 386
 
-XDC-darwin-amd64:
-	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/XDC
+XPS-darwin-amd64:
+	build/env.sh go run build/ci.go xgo -- --go=$(GO) --targets=darwin/amd64 -v ./cmd/XPS
 	@echo "Darwin amd64 cross compilation done:"
-	@ls -ld $(GOBIN)/XDC-darwin-* | grep amd64
+	@ls -ld $(GOBIN)/XPS-darwin-* | grep amd64
 
 gofmt:
 	$(GOFMT) -s -w $(GO_FILES)

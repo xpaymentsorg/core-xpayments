@@ -35,7 +35,7 @@ func FromHex(s string) []byte {
 		if s[0:2] == "0x" || s[0:2] == "0X" {
 			s = s[2:]
 		}
-		if (s[0] == 'x' || s[0] == 'X') && (s[1] == 'd' || s[1] == 'D') && (s[2] == 'c' || s[2] == 'C') {
+		if (s[0] == 'x' || s[0] == 'X') && (s[1] == 'p' || s[1] == 'P') && (s[2] == 's' || s[2] == 'S') {
 			s = s[3:]
 		}
 	}
@@ -58,8 +58,8 @@ func CopyBytes(b []byte) (copiedBytes []byte) {
 	return
 }
 
-func hasXDCPrefix(str string) bool {
-	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'd' || str[1] == 'D') && (str[2] == 'c' || str[2] == 'C')
+func hasXPSPrefix(str string) bool {
+	return len(str) >= 3 && (str[0] == 'x' || str[0] == 'X') && (str[1] == 'p' || str[1] == 'P') && (str[2] == 's' || str[2] == 'S')
 }
 
 func hasHexPrefix(str string) bool {
