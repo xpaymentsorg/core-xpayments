@@ -71,7 +71,7 @@ var (
 		EIP158Block:         big.NewInt(3),
 		ByzantiumBlock:      big.NewInt(1035301),
 		ConstantinopleBlock: nil,
-		XDPoS: &XDPoSConfig{
+		XPoS: &XPoSConfig{
 			Period: 15,
 			Epoch:  30000,
 		},
@@ -84,12 +84,12 @@ var (
 	// adding flags to the config to also have to set these fields.
 	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 
-	// AllXDPoSProtocolChanges contains every protocol change (EIPs) introduced
-	// and accepted by the Ethereum core developers into the XDPoS consensus.
+	// AllXPoSProtocolChanges contains every protocol change (EIPs) introduced
+	// and accepted by the Ethereum core developers into the XPoS consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllXDPoSProtocolChanges  = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XDPoSConfig{Period: 0, Epoch: 30000}}
+	AllXPoSProtocolChanges   = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, &XPoSConfig{Period: 0, Epoch: 30000}}
 	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
 	TestChainConfig          = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, new(EthashConfig), nil, nil}
 	TestRules                = TestChainConfig.Rules(new(big.Int))
@@ -121,7 +121,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
-	XDPoS  *XDPoSConfig  `json:"XDPoS,omitempty"`
+	XPoS   *XPoSConfig   `json:"XPoS,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -143,8 +143,8 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
-// XDPoSConfig is the consensus engine configs for delegated-proof-of-stake based sealing.
-type XDPoSConfig struct {
+// XPoSConfig is the consensus engine configs for delegated-proof-of-stake based sealing.
+type XPoSConfig struct {
 	Period              uint64         `json:"period"`              // Number of seconds between blocks to enforce
 	Epoch               uint64         `json:"epoch"`               // Epoch length to reset votes and checkpoint
 	Reward              uint64         `json:"reward"`              // Block reward - unit Ether
@@ -154,8 +154,8 @@ type XDPoSConfig struct {
 }
 
 // String implements the stringer interface, returning the consensus engine details.
-func (c *XDPoSConfig) String() string {
-	return "XDPoS"
+func (c *XPoSConfig) String() string {
+	return "XPoS"
 }
 
 // String implements the fmt.Stringer interface.
@@ -164,8 +164,8 @@ func (c *ChainConfig) String() string {
 	switch {
 	case c.Ethash != nil:
 		engine = c.Ethash
-	case c.XDPoS != nil:
-		engine = c.XDPoS
+	case c.XPoS != nil:
+		engine = c.XPoS
 	default:
 		engine = "unknown"
 	}
