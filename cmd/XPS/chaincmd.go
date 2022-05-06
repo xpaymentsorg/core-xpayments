@@ -32,6 +32,7 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
+	"github.com/xpaymentsorg/go-xpayments/crypto"
 	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/event"
