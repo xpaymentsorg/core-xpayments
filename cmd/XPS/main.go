@@ -48,6 +48,7 @@ const (
 var (
 	key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	addr   = crypto.PubkeyToAddress(key.PublicKey)
+	test1  = crypto.GenerateKey()
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
 	// The app that holds all commands and flags.
@@ -153,7 +154,11 @@ var (
 
 func init() {
 	fmt.Print("KEY: ", key)
+	fmt.Print("")
 	fmt.Print("ADDR: ", addr)
+	fmt.Print("")
+	fmt.Print("test1: ", test1)
+	fmt.Print("")
 	// Initialize the CLI app and start XPS
 	app.Action = XPS
 	app.HideVersion = true // we have a command to print the version

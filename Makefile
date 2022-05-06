@@ -10,11 +10,6 @@ GO_FILES := $(shell find $(shell go list -f '{{.Dir}}' $(GO_PACKAGES)) -name \*.
 
 GIT = git
 
-test:
-	build/env.sh go run build/ci.go install ./cmd/test
-	@echo "Done building."
-	@echo "Run \"$(GOBIN)/test\" to launch test."
-
 XPS:
 	build/env.sh go run build/ci.go install ./cmd/XPS
 	@echo "Done building."
