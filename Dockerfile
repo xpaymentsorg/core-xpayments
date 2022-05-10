@@ -1,23 +1,21 @@
-FROM golang:1.10-alpine as builder
+FROM golang:1.12-alpine as builder
 
-RUN apk add --no-cache make gcc musl-dev linux-headers
+RUN apk add --no-cache make gcc musl-dev linux-headers git
 
-ADD . /XDCchain
-RUN cd /XDCchain && make XDC
+ADD . /xpaymentsorg
+RUN cd /xpaymentsorg && make XPS
 
 FROM alpine:latest
 
-LABEL maintainer="anil@xinfin.org"
+WORKDIR /xpaymentsorg
 
-WORKDIR /XDCchain
+COPY --from=builder /xpaymentsorg/build/bin/XPS /usr/local/bin/XPS
 
-COPY --from=builder /XDCchain/build/bin/XDC /usr/local/bin/XDC
-
-RUN chmod +x /usr/local/bin/XDC
+RUN chmod +x /usr/local/bin/XPS
 
 EXPOSE 8545
 EXPOSE 30303
 
-ENTRYPOINT ["/usr/local/bin/XDC"]
+ENTRYPOINT ["/usr/local/bin/XPS"]
 
 CMD ["--help"]

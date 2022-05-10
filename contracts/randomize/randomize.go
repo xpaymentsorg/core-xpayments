@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDCchain
+// Copyright (c) 2018 XDPoSChain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -22,18 +22,18 @@ import (
 )
 
 type Randomize struct {
-	*contract.XDCRandomizeSession
+	*contract.XPSRandomizeSession
 	contractBackend bind.ContractBackend
 }
 
 func NewRandomize(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) (*Randomize, error) {
-	randomize, err := contract.NewXDCRandomize(contractAddr, contractBackend)
+	randomize, err := contract.NewXPSRandomize(contractAddr, contractBackend)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Randomize{
-		&contract.XDCRandomizeSession{
+		&contract.XPSRandomizeSession{
 			Contract:     randomize,
 			TransactOpts: *transactOpts,
 		},
@@ -42,7 +42,7 @@ func NewRandomize(transactOpts *bind.TransactOpts, contractAddr common.Address, 
 }
 
 func DeployRandomize(transactOpts *bind.TransactOpts, contractBackend bind.ContractBackend) (common.Address, *Randomize, error) {
-	randomizeAddr, _, _, err := contract.DeployXDCRandomize(transactOpts, contractBackend)
+	randomizeAddr, _, _, err := contract.DeployXPSRandomize(transactOpts, contractBackend)
 	if err != nil {
 		return randomizeAddr, nil, err
 	}

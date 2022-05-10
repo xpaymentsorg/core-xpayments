@@ -22,10 +22,9 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
-
-	"reflect"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"

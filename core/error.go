@@ -33,7 +33,7 @@ var (
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
 
-	ErrNotXDPoS = errors.New("XDPoS not found in config")
+	ErrNotXPoS = errors.New("XPoS not found in config")
 
 	ErrNotFoundM1 = errors.New("list M1 not found ")
 
