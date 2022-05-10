@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xpaymentsorg/go-xpayments/XPSx"
+	"github.com/xpaymentsorg/go-xpayments/XPSxlending"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/core"
@@ -104,7 +106,9 @@ func newTester(t *testing.T, confOverride func(*eth.Config)) *tester {
 	if confOverride != nil {
 		confOverride(ethConf)
 	}
-	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return eth.New(ctx, ethConf, &XPSx.XPSX{}, &XPSxlending.Lending{})
+	}); err != nil {
 		t.Fatalf("failed to register Ethereum protocol: %v", err)
 	}
 	// Start the node and assemble the JavaScript console around it

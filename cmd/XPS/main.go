@@ -48,7 +48,7 @@ var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the xPaymentsChain command line interface")
+	app = utils.NewApp(gitCommit, "the xPayments command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -60,16 +60,18 @@ var (
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
 		//utils.NoUSBFlag,
-		//utils.DashboardEnabledFlag,
-		//utils.DashboardAddrFlag,
-		//utils.DashboardPortFlag,
-		//utils.DashboardRefreshFlag,
 		//utils.EthashCacheDirFlag,
 		//utils.EthashCachesInMemoryFlag,
 		//utils.EthashCachesOnDiskFlag,
 		//utils.EthashDatasetDirFlag,
 		//utils.EthashDatasetsInMemoryFlag,
 		//utils.EthashDatasetsOnDiskFlag,
+		utils.XPSXEnabledFlag,
+		utils.XPSXDataDirFlag,
+		utils.XPSXDBEngineFlag,
+		utils.XPSXDBConnectionUrlFlag,
+		utils.XPSXDBReplicaSetNameFlag,
+		utils.XPSXDBNameFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
 		utils.TxPoolRejournalFlag,
@@ -111,6 +113,7 @@ var (
 		//utils.RinkebyFlag,
 		//utils.VMEnableDebugFlag,
 		utils.XPSTestnetFlag,
+		utils.RewoundFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.RPCVirtualHostsFlag,
@@ -125,6 +128,7 @@ var (
 		utils.AnnounceTxsFlag,
 		utils.StoreRewardFlag,
 		utils.RollbackFlag,
+		utils.XPSSlaveModeFlag,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -152,7 +156,7 @@ func init() {
 	// Initialize the CLI app and start XPS
 	app.Action = XPS
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright (c) 2021-2022 xPaymentsChain"
+	app.Copyright = "Copyright (c) 2022 xPayments"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -178,7 +182,7 @@ func init() {
 	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
-	//app.Flags = append(app.Flags, whisperFlags...)
+	app.Flags = append(app.Flags, whisperFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		runtime.GOMAXPROCS(runtime.NumCPU())
@@ -294,6 +298,7 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
 		go func() {
 			started := false
 			ok := false
+			slaveMode := ctx.GlobalIsSet(utils.XPSSlaveModeFlag.Name)
 			var err error
 			if common.IsTestnet {
 				ok, err = ethereum.ValidateMasternodeTestnet()
@@ -307,23 +312,28 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
 				}
 			}
 			if ok {
-				log.Info("Masternode found. Enabling staking mode...")
-				// Use a reduced number of threads if requested
-				if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
-					type threaded interface {
-						SetThreads(threads int)
+				if slaveMode {
+					log.Info("Masternode slave mode found.")
+					started = false
+				} else {
+					log.Info("Masternode found. Enabling staking mode...")
+					// Use a reduced number of threads if requested
+					if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
+						type threaded interface {
+							SetThreads(threads int)
+						}
+						if th, ok := ethereum.Engine().(threaded); ok {
+							th.SetThreads(threads)
+						}
 					}
-					if th, ok := ethereum.Engine().(threaded); ok {
-						th.SetThreads(threads)
+					// Set the gas price to the limits from the CLI and start mining
+					ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
+					if err := ethereum.StartStaking(true); err != nil {
+						utils.Fatalf("Failed to start staking: %v", err)
 					}
+					started = true
+					log.Info("Enabled staking node!!!")
 				}
-				// Set the gas price to the limits from the CLI and start mining
-				ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-				if err := ethereum.StartStaking(true); err != nil {
-					utils.Fatalf("Failed to start staking: %v", err)
-				}
-				started = true
-				log.Info("Enabled staking node!!!")
 			}
 			defer close(core.CheckpointCh)
 			for range core.CheckpointCh {
@@ -347,23 +357,28 @@ func startNode(ctx *cli.Context, stack *node.Node, cfg XPSConfig) {
 						log.Info("Cancelled mining mode!!!")
 					}
 				} else if !started {
-					log.Info("Masternode found. Enabling staking mode...")
-					// Use a reduced number of threads if requested
-					if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
-						type threaded interface {
-							SetThreads(threads int)
+					if slaveMode {
+						log.Info("Masternode slave mode found.")
+						started = false
+					} else {
+						log.Info("Masternode found. Enabling staking mode...")
+						// Use a reduced number of threads if requested
+						if threads := ctx.GlobalInt(utils.StakerThreadsFlag.Name); threads > 0 {
+							type threaded interface {
+								SetThreads(threads int)
+							}
+							if th, ok := ethereum.Engine().(threaded); ok {
+								th.SetThreads(threads)
+							}
 						}
-						if th, ok := ethereum.Engine().(threaded); ok {
-							th.SetThreads(threads)
+						// Set the gas price to the limits from the CLI and start mining
+						ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
+						if err := ethereum.StartStaking(true); err != nil {
+							utils.Fatalf("Failed to start staking: %v", err)
 						}
+						started = true
+						log.Info("Enabled staking node!!!")
 					}
-					// Set the gas price to the limits from the CLI and start mining
-					ethereum.TxPool().SetGasPrice(cfg.Eth.GasPrice)
-					if err := ethereum.StartStaking(true); err != nil {
-						utils.Fatalf("Failed to start staking: %v", err)
-					}
-					started = true
-					log.Info("Enabled staking node!!!")
 				}
 			}
 		}()

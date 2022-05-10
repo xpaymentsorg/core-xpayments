@@ -17,9 +17,8 @@
 package tests
 
 import (
-	"testing"
-
 	"math/big"
+	"testing"
 
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/params"

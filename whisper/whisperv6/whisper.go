@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/xpaymentsorg/go-xpayments/common"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
@@ -35,7 +36,6 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/rpc"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/sync/syncmap"
-	set "gopkg.in/fatih/set.v0"
 )
 
 // Statistics holds several message-related counter for analytics
@@ -69,7 +69,7 @@ type Whisper struct {
 
 	poolMu      sync.RWMutex              // Mutex to sync the message and expiration pools
 	envelopes   map[common.Hash]*Envelope // Pool of envelopes currently tracked by this node
-	expirations map[uint32]*set.SetNonTS  // Message expiration pool
+	expirations map[uint32]mapset.Set     // Message expiration pool
 
 	peerMu sync.RWMutex       // Mutex to sync the active peer set
 	peers  map[*Peer]struct{} // Set of currently active peers
@@ -100,7 +100,7 @@ func New(cfg *Config) *Whisper {
 		privateKeys:   make(map[string]*ecdsa.PrivateKey),
 		symKeys:       make(map[string][]byte),
 		envelopes:     make(map[common.Hash]*Envelope),
-		expirations:   make(map[uint32]*set.SetNonTS),
+		expirations:   make(map[uint32]mapset.Set),
 		peers:         make(map[*Peer]struct{}),
 		messageQueue:  make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:   make(chan *Envelope, messageQueueLimit),
@@ -609,6 +609,8 @@ func (whisper *Whisper) Start(*p2p.Server) error {
 
 	return nil
 }
+func (whisper *Whisper) SaveData() {
+}
 
 // Stop implements node.Service, stopping the background data propagation thread
 // of the Whisper protocol.
@@ -796,9 +798,9 @@ func (whisper *Whisper) add(envelope *Envelope, isP2P bool) (bool, error) {
 	if !alreadyCached {
 		whisper.envelopes[hash] = envelope
 		if whisper.expirations[envelope.Expiry] == nil {
-			whisper.expirations[envelope.Expiry] = set.NewNonTS()
+			whisper.expirations[envelope.Expiry] = mapset.NewThreadUnsafeSet()
 		}
-		if !whisper.expirations[envelope.Expiry].Has(hash) {
+		if !whisper.expirations[envelope.Expiry].Contains(hash) {
 			whisper.expirations[envelope.Expiry].Add(hash)
 		}
 	}

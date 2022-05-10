@@ -217,7 +217,7 @@ type XPSRandomizeFilterer struct {
 // XPSRandomizeSession is an auto generated Go binding around an Ethereum contract,
 // with pre-set call and transact options.
 type XPSRandomizeSession struct {
-	Contract     *XPSRandomize    // Generic contract binding to set the session for
+	Contract     *XPSRandomize     // Generic contract binding to set the session for
 	CallOpts     bind.CallOpts     // Call options to use throughout this session
 	TransactOpts bind.TransactOpts // Transaction auth options to use throughout this session
 }
@@ -226,14 +226,14 @@ type XPSRandomizeSession struct {
 // with pre-set call options.
 type XPSRandomizeCallerSession struct {
 	Contract *XPSRandomizeCaller // Generic contract caller binding to set the session for
-	CallOpts bind.CallOpts        // Call options to use throughout this session
+	CallOpts bind.CallOpts       // Call options to use throughout this session
 }
 
 // XPSRandomizeTransactorSession is an auto generated write-only Go binding around an Ethereum contract,
 // with pre-set transact options.
 type XPSRandomizeTransactorSession struct {
 	Contract     *XPSRandomizeTransactor // Generic contract transactor binding to set the session for
-	TransactOpts bind.TransactOpts        // Transaction auth options to use throughout this session
+	TransactOpts bind.TransactOpts       // Transaction auth options to use throughout this session
 }
 
 // XPSRandomizeRaw is an auto generated low-level Go binding around an Ethereum contract.

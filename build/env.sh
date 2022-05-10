@@ -10,11 +10,11 @@ fi
 # Create fake Go workspace if it doesn't exist yet.
 workspace="$PWD/build/_workspace"
 root="$PWD"
-xpsdir="$workspace/src/github.com/xpaymentsorg"
-if [ ! -L "$xpsdir/go-xpayments" ]; then
-    mkdir -p "$xpsdir"
-    cd "$xpsdir"
-    ln -s ../../../../../. go-xpayments
+ethdir="$workspace/src/github.com/xpaymentsorg"
+if [ ! -L "$ethdir/xpaymentsorg" ]; then
+    mkdir -p "$ethdir"
+    cd "$ethdir"
+    ln -s ../../../../../. xpaymentsorg
     cd "$root"
 fi
 
@@ -23,8 +23,8 @@ GOPATH="$workspace"
 export GOPATH
 
 # Run the command inside the workspace.
-cd "$xpsdir/go-xpayments"
-PWD="$xpsdir/go-xpayments"
+cd "$ethdir/xpaymentsorg"
+PWD="$ethdir/xpaymentsorg"
 
 # Launch the arguments with the configured environment.
 exec "$@"

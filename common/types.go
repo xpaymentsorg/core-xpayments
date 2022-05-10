@@ -28,18 +28,26 @@ import (
 )
 
 const (
-	HashLength          = 32
-	AddressLength       = 20
-	MasternodeVotingSMC = "xpscf33d4F38a96879eFCDCe7C0AaFa6d5e1fA60e7f"
-	BlockSigners        = "xps3505fA26D159c4D001C5612855f1Af14Cb7B1A4C"
-	RandomizeSMC        = "xps64DFE3617EB6fb351d5DD1d08eAFc7454E114f79"
-	FoudationAddr       = "xps93893e6238aE33eeDe4A91C355065fb611d29eb4"
-	TeamAddr            = "xps0C935C345D5D133720DDe12e2aE2CFBBdB267560"
-	VoteMethod          = "0x6dd7d8ea"
-	UnvoteMethod        = "0x02aa9be2"
-	ProposeMethod       = "0x01267951"
-	ResignMethod        = "0xae6e43f5"
-	SignMethod          = "0xe341eaa4"
+	HashLength                       = 32
+	AddressLength                    = 20
+	BlockSigners                     = "xps0000000000000000000000000000000000000089"
+	MasternodeVotingSMC              = "xps0000000000000000000000000000000000000088"
+	RandomizeSMC                     = "xps0000000000000000000000000000000000000090"
+	FoudationAddr                    = "xps0000000000000000000000000000000000000068"
+	TeamAddr                         = "xps0000000000000000000000000000000000000099"
+	XPSXAddr                         = "xps0000000000000000000000000000000000000091"
+	TradingStateAddr                 = "xps0000000000000000000000000000000000000092"
+	XPSXLendingAddress               = "xps0000000000000000000000000000000000000093"
+	XPSXLendingFinalizedTradeAddress = "xps0000000000000000000000000000000000000094"
+	XPSNativeAddress                 = "xps0000000000000000000000000000000000000001"
+	LendingLockAddress               = "xps0000000000000000000000000000000000000011"
+	VoteMethod                       = "0x6dd7d8ea"
+	UnvoteMethod                     = "0x02aa9be2"
+	ProposeMethod                    = "0x01267951"
+	ResignMethod                     = "0xae6e43f5"
+	SignMethod                       = "0xe341eaa4"
+	XPSXApplyMethod                  = "0xc6b32f34"
+	XPSZApplyMethod                  = "0xc6b32f34"
 )
 
 var (
@@ -50,6 +58,11 @@ var (
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash [HashLength]byte
 
+type Vote struct {
+	Masternode Address
+	Voter      Address
+}
+
 func BytesToHash(b []byte) Hash {
 	var h Hash
 	h.SetBytes(b)
@@ -57,6 +70,7 @@ func BytesToHash(b []byte) Hash {
 }
 func StringToHash(s string) Hash { return BytesToHash([]byte(s)) }
 func BigToHash(b *big.Int) Hash  { return BytesToHash(b.Bytes()) }
+func Uint64ToHash(b uint64) Hash { return BytesToHash(new(big.Int).SetUint64(b).Bytes()) }
 func HexToHash(s string) Hash    { return BytesToHash(FromHex(s)) }
 
 // Get the string representation of the underlying hash
@@ -153,9 +167,16 @@ func BytesToAddress(b []byte) Address {
 	a.SetBytes(b)
 	return a
 }
+
 func StringToAddress(s string) Address { return BytesToAddress([]byte(s)) }
-func BigToAddress(b *big.Int) Address  { return BytesToAddress(b.Bytes()) }
-func HexToAddress(s string) Address    { return BytesToAddress(FromHex(s)) }
+
+// BigToAddress returns Address with byte values of b.
+// If b is larger than len(h), b will be cropped from the left.
+func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
+
+// HexToAddress returns Address with byte values of s.
+// If s is larger than len(h), s will be cropped from the left.
+func HexToAddress(s string) Address { return BytesToAddress(FromHex(s)) }
 
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
@@ -228,6 +249,8 @@ func (a *Address) Set(other Address) {
 
 // MarshalText returns the hex representation of a.
 func (a Address) MarshalText() ([]byte, error) {
+	// Handle '0x' or 'xps' prefix here.
+	// return hexutil.Bytes(a[:]).MarshalText()
 	return hexutil.Bytes(a[:]).MarshalXPSText()
 }
 

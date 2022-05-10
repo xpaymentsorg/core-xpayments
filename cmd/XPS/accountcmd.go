@@ -32,7 +32,7 @@ import (
 var (
 	walletCommand = cli.Command{
 		Name:      "wallet",
-		Usage:     "Manage xPaymentsChain presale wallets",
+		Usage:     "Manage xPayments presale wallets",
 		ArgsUsage: "",
 		Category:  "ACCOUNT COMMANDS",
 		Description: `
@@ -45,7 +45,7 @@ passwordfile as argument containing the wallet password in plaintext.`,
 			{
 
 				Name:      "import",
-				Usage:     "Import XPSchain presale wallet",
+				Usage:     "Import xPayments presale wallet",
 				ArgsUsage: "<keyFile>",
 				Action:    utils.MigrateFlags(importWallet),
 				Category:  "ACCOUNT COMMANDS",
