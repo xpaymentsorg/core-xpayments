@@ -50,7 +50,7 @@ var (
 			Reward:              250,
 			RewardCheckpoint:    900,
 			Gap:                 5,
-			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000068"),
+			FoudationWalletAddr: common.HexToAddress("0x0000000000000000000000000000000000000015"),
 		},
 	}
 
