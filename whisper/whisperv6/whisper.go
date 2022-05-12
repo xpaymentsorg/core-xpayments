@@ -609,8 +609,6 @@ func (whisper *Whisper) Start(*p2p.Server) error {
 
 	return nil
 }
-func (whisper *Whisper) SaveData() {
-}
 
 // Stop implements node.Service, stopping the background data propagation thread
 // of the Whisper protocol.

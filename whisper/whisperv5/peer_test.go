@@ -95,7 +95,6 @@ var expectedMessage []byte = []byte("per rectum ad astra")
 // 4. first node sends one expected (decryptable) message,
 // 5. checks if each node have received and decrypted exactly one message.
 func TestSimulation(t *testing.T) {
-	t.Skip("TODO: PR-136 Broken test due to EVM upgrade!")
 	initialize(t)
 
 	for i := 0; i < NumNodes; i++ {
@@ -115,14 +114,8 @@ func initialize(t *testing.T) {
 	for i := 0; i < NumNodes; i++ {
 		var node TestNode
 		node.shh = New(&DefaultConfig)
-		err = node.shh.SetMinimumPoW(0.00000001)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = node.shh.Start(nil)
-		if err != nil {
-			t.Fatal(err)
-		}
+		node.shh.SetMinimumPoW(0.00000001)
+		node.shh.Start(nil)
 		topics := make([]TopicType, 0)
 		topics = append(topics, sharedTopic)
 		f := Filter{KeySym: sharedKey}
