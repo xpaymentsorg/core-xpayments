@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	natpmp "github.com/jackpal/go-nat-pmp"
+	"github.com/jackpal/go-nat-pmp"
 	"github.com/xpaymentsorg/go-xpayments/log"
 )
 

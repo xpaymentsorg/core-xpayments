@@ -1,15 +1,17 @@
-FROM golang:1.12-alpine as builder
+FROM golang:1.10-alpine as builder
 
-RUN apk add --no-cache make gcc musl-dev linux-headers git
+RUN apk add --no-cache make gcc musl-dev linux-headers
 
-ADD . /xpaymentsorg
-RUN cd /xpaymentsorg && make XPS
+ADD . /XPSchain
+RUN cd /XPSchain && make XPS
 
 FROM alpine:latest
 
-WORKDIR /xpaymentsorg
+LABEL maintainer="anil@xinfin.org"
 
-COPY --from=builder /xpaymentsorg/build/bin/XPS /usr/local/bin/XPS
+WORKDIR /XPSchain
+
+COPY --from=builder /XPSchain/build/bin/XPS /usr/local/bin/XPS
 
 RUN chmod +x /usr/local/bin/XPS
 

@@ -246,7 +246,6 @@ func loadKeyStoreTestV1(file string, t *testing.T) map[string]KeyStoreTestV1 {
 }
 
 func TestKeyForDirectICAP(t *testing.T) {
-	t.Skip("NewKeyForDirectICAP in this test is invalid, will fall into a infinite loop ")
 	t.Parallel()
 	key := NewKeyForDirectICAP(rand.Reader)
 	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
@@ -255,7 +254,6 @@ func TestKeyForDirectICAP(t *testing.T) {
 }
 
 func TestV3_31_Byte_Key(t *testing.T) {
-	t.Skip("This test does not ")
 	t.Parallel()
 	tests := loadKeyStoreTestV3("testdata/v3_test_vector.json", t)
 	testDecryptV3(tests["31_byte_key"], t)

@@ -28,7 +28,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/xpaymentsorg/go-xpayments/XPSx"
 	"github.com/xpaymentsorg/go-xpayments/accounts"
 	"github.com/xpaymentsorg/go-xpayments/accounts/keystore"
 	"github.com/xpaymentsorg/go-xpayments/common"
@@ -37,12 +36,16 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
 	"github.com/xpaymentsorg/go-xpayments/consensus/ethash"
 	"github.com/xpaymentsorg/go-xpayments/core"
+	"github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/vm"
 	"github.com/xpaymentsorg/go-xpayments/crypto"
+	"github.com/xpaymentsorg/go-xpayments/dashboard"
 	"github.com/xpaymentsorg/go-xpayments/eth"
 	"github.com/xpaymentsorg/go-xpayments/eth/downloader"
 	"github.com/xpaymentsorg/go-xpayments/eth/gasprice"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
+	"github.com/xpaymentsorg/go-xpayments/ethstats"
+	"github.com/xpaymentsorg/go-xpayments/les"
 	"github.com/xpaymentsorg/go-xpayments/log"
 	"github.com/xpaymentsorg/go-xpayments/metrics"
 	"github.com/xpaymentsorg/go-xpayments/node"
@@ -139,7 +142,7 @@ var (
 	}
 	NetworkIdFlag = cli.Uint64Flag{
 		Name:  "networkid",
-		Usage: "Network identifier (integer, 89=xPayments)",
+		Usage: "Network identifier (integer, 89=XPSchain)",
 		Value: eth.DefaultConfig.NetworkId,
 	}
 	TestnetFlag = cli.BoolFlag{
@@ -147,8 +150,8 @@ var (
 		Usage: "Ropsten network: pre-configured proof-of-work test network",
 	}
 	XPSTestnetFlag = cli.BoolFlag{
-		Name:  "apothem",
-		Usage: "XPS Apothem Network",
+		Name:  "XPS-testnet",
+		Usage: "XPS test network",
 	}
 	RinkebyFlag = cli.BoolFlag{
 		Name:  "rinkeby",
@@ -204,10 +207,25 @@ var (
 		Name:  "lightkdf",
 		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
 	}
-	// XPSX settings
-	XPSXEnabledFlag = cli.BoolFlag{
-		Name:  "XPSx",
-		Usage: "Enable the XPSX protocol",
+	// Dashboard settings
+	DashboardEnabledFlag = cli.BoolFlag{
+		Name:  "dashboard",
+		Usage: "Enable the dashboard",
+	}
+	DashboardAddrFlag = cli.StringFlag{
+		Name:  "dashboard.addr",
+		Usage: "Dashboard listening interface",
+		Value: dashboard.DefaultConfig.Host,
+	}
+	DashboardPortFlag = cli.IntFlag{
+		Name:  "dashboard.host",
+		Usage: "Dashboard listening port",
+		Value: dashboard.DefaultConfig.Port,
+	}
+	DashboardRefreshFlag = cli.DurationFlag{
+		Name:  "dashboard.refresh",
+		Usage: "Dashboard metrics collection refresh rate",
+		Value: dashboard.DefaultConfig.Refresh,
 	}
 	// Ethash settings
 	EthashCacheDirFlag = DirectoryFlag{
@@ -305,6 +323,11 @@ var (
 		Usage: "Percentage of cache memory allowance to use for trie pruning",
 		Value: 25,
 	}
+	TrieCacheGenFlag = cli.IntFlag{
+		Name:  "trie-cache-gens",
+		Usage: "Number of trie node generations to keep in memory",
+		Value: int(state.MaxTrieCacheGen),
+	}
 	// Miner settings
 	StakingEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
@@ -318,7 +341,7 @@ var (
 	TargetGasLimitFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas limit sets the artificial target gas floor for the blocks to mine",
-		Value: params.XPSGenesisGasLimit,
+		Value: params.GenesisGasLimit,
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
@@ -376,11 +399,6 @@ var (
 		Name:  "rpcaddr",
 		Usage: "HTTP-RPC server listening interface",
 		Value: node.DefaultHTTPHost,
-	}
-	RewoundFlag = cli.IntFlag{
-		Name:  "rewound",
-		Usage: "Rewound blocks",
-		Value: 0,
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
@@ -532,34 +550,6 @@ var (
 		Usage: "Minimum POW accepted",
 		Value: whisper.DefaultMinimumPoW,
 	}
-	XPSXDataDirFlag = DirectoryFlag{
-		Name:  "XPSx.datadir",
-		Usage: "Data directory for the XPSX databases",
-		Value: DirectoryString{filepath.Join(DataDirFlag.Value.String(), "XPSx")},
-	}
-	XPSXDBEngineFlag = cli.StringFlag{
-		Name:  "XPSx.dbengine",
-		Usage: "Database engine for XPSX (leveldb, mongodb)",
-		Value: "leveldb",
-	}
-	XPSXDBNameFlag = cli.StringFlag{
-		Name:  "XPSx.dbName",
-		Usage: "Database name for XPSX",
-		Value: "XPSdex",
-	}
-	XPSXDBConnectionUrlFlag = cli.StringFlag{
-		Name:  "XPSx.dbConnectionUrl",
-		Usage: "ConnectionUrl to database if dbEngine is mongodb. Host:port. If there are multiple instances, separated by comma. Eg: localhost:27017,localhost:27018",
-		Value: "localhost:27017",
-	}
-	XPSXDBReplicaSetNameFlag = cli.StringFlag{
-		Name:  "XPSx.dbReplicaSetName",
-		Usage: "ReplicaSetName if Master-Slave is setup",
-	}
-	XPSSlaveModeFlag = cli.BoolFlag{
-		Name:  "slave",
-		Usage: "Enable slave mode",
-	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -623,17 +613,14 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		} else {
 			urls = strings.Split(ctx.GlobalString(BootnodesFlag.Name), ",")
 		}
-	// case ctx.GlobalBool(TestnetFlag.Name):
-	// 	urls = params.TestnetBootnodes
-	// case ctx.GlobalBool(RinkebyFlag.Name):
-	// 	urls = params.RinkebyBootnodes
+	case ctx.GlobalBool(TestnetFlag.Name):
+		urls = params.TestnetBootnodes
+	case ctx.GlobalBool(RinkebyFlag.Name):
+		urls = params.RinkebyBootnodes
 	case cfg.BootstrapNodes != nil:
 		return // already set, don't apply defaults.
-	case !ctx.GlobalIsSet(BootnodesFlag.Name):
-		urls = params.MainnetBootnodes
-	case ctx.GlobalBool(XPSTestnetFlag.Name):
-		urls = params.TestnetBootnodes
 	}
+
 	cfg.BootstrapNodes = make([]*discover.Node, 0, len(urls))
 	for _, url := range urls {
 		node, err := discover.ParseNode(url)
@@ -838,7 +825,7 @@ func SetP2PConfig(ctx *cli.Context, cfg *p2p.Config) {
 	setNAT(ctx, cfg)
 	setListenAddress(ctx, cfg)
 	setBootstrapNodes(ctx, cfg)
-	// setBootstrapNodesV5(ctx, cfg)
+	setBootstrapNodesV5(ctx, cfg)
 
 	lightClient := ctx.GlobalBool(LightModeFlag.Name) || ctx.GlobalString(SyncModeFlag.Name) == "light"
 	lightServer := ctx.GlobalInt(LightServFlag.Name) != 0
@@ -1044,42 +1031,6 @@ func SetShhConfig(ctx *cli.Context, stack *node.Node, cfg *whisper.Config) {
 	}
 }
 
-func SetXPSXConfig(ctx *cli.Context, cfg *XPSx.Config, XPSDataDir string) {
-	if ctx.GlobalIsSet(XPSXDataDirFlag.Name) {
-		cfg.DataDir = ctx.GlobalString(XPSXDataDirFlag.Name)
-	} else {
-		// default XPSx datadir: DATADIR/XPSx
-		defaultXPSXDataDir := filepath.Join(XPSDataDir, "XPSx")
-
-		filesInXPSXDefaultDir, _ := WalkMatch(defaultXPSXDataDir, "*.ldb")
-		filesInNodeDefaultDir, _ := WalkMatch(node.DefaultDataDir(), "*.ldb")
-		if len(filesInXPSXDefaultDir) == 0 && len(filesInNodeDefaultDir) > 0 {
-			cfg.DataDir = node.DefaultDataDir()
-		} else {
-			cfg.DataDir = defaultXPSXDataDir
-		}
-	}
-	log.Info("XPSX datadir", "path", cfg.DataDir)
-	if ctx.GlobalIsSet(XPSXDBEngineFlag.Name) {
-		cfg.DBEngine = ctx.GlobalString(XPSXDBEngineFlag.Name)
-	} else {
-		cfg.DBEngine = XPSXDBEngineFlag.Value
-	}
-	if ctx.GlobalIsSet(XPSXDBNameFlag.Name) {
-		cfg.DBName = ctx.GlobalString(XPSXDBNameFlag.Name)
-	} else {
-		cfg.DBName = XPSXDBNameFlag.Value
-	}
-	if ctx.GlobalIsSet(XPSXDBConnectionUrlFlag.Name) {
-		cfg.ConnectionUrl = ctx.GlobalString(XPSXDBConnectionUrlFlag.Name)
-	} else {
-		cfg.ConnectionUrl = XPSXDBConnectionUrlFlag.Value
-	}
-	if ctx.GlobalIsSet(XPSXDBReplicaSetNameFlag.Name) {
-		cfg.ReplicaSetName = ctx.GlobalString(XPSXDBReplicaSetNameFlag.Name)
-	}
-}
-
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	// Avoid conflicting network flags
@@ -1184,6 +1135,71 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		}
 	}
 	// TODO(fjl): move trie cache generations into config
+	if gen := ctx.GlobalInt(TrieCacheGenFlag.Name); gen > 0 {
+		state.MaxTrieCacheGen = uint16(gen)
+	}
+}
+
+// SetDashboardConfig applies dashboard related command line flags to the config.
+func SetDashboardConfig(ctx *cli.Context, cfg *dashboard.Config) {
+	cfg.Host = ctx.GlobalString(DashboardAddrFlag.Name)
+	cfg.Port = ctx.GlobalInt(DashboardPortFlag.Name)
+	cfg.Refresh = ctx.GlobalDuration(DashboardRefreshFlag.Name)
+}
+
+// RegisterEthService adds an Ethereum client to the stack.
+func RegisterEthService(stack *node.Node, cfg *eth.Config) {
+	var err error
+	if cfg.SyncMode == downloader.LightSync {
+		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			return les.New(ctx, cfg)
+		})
+	} else {
+		err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			fullNode, err := eth.New(ctx, cfg)
+			if fullNode != nil && cfg.LightServ > 0 {
+				ls, _ := les.NewLesServer(fullNode, cfg)
+				fullNode.AddLesServer(ls)
+			}
+			return fullNode, err
+		})
+	}
+	if err != nil {
+		Fatalf("Failed to register the Ethereum service: %v", err)
+	}
+}
+
+// RegisterDashboardService adds a dashboard to the stack.
+func RegisterDashboardService(stack *node.Node, cfg *dashboard.Config, commit string) {
+	stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return dashboard.New(cfg, commit)
+	})
+}
+
+// RegisterShhService configures Whisper and adds it to the given node.
+func RegisterShhService(stack *node.Node, cfg *whisper.Config) {
+	if err := stack.Register(func(n *node.ServiceContext) (node.Service, error) {
+		return whisper.New(cfg), nil
+	}); err != nil {
+		Fatalf("Failed to register the Whisper service: %v", err)
+	}
+}
+
+// RegisterEthStatsService configures the Ethereum Stats daemon and adds it to
+// th egiven node.
+func RegisterEthStatsService(stack *node.Node, url string) {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		// Retrieve both eth and les services
+		var ethServ *eth.Ethereum
+		ctx.Service(&ethServ)
+
+		var lesServ *les.LightEthereum
+		ctx.Service(&lesServ)
+
+		return ethstats.New(url, ethServ, lesServ)
+	}); err != nil {
+		Fatalf("Failed to register the Ethereum Stats service: %v", err)
+	}
 }
 
 // SetupNetwork configures the system for either the main net or some test network.
@@ -1202,7 +1218,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node) ethdb.Database {
 	if ctx.GlobalBool(LightModeFlag.Name) {
 		name = "lightchaindata"
 	}
-	chainDb, err := stack.OpenDatabase(name, cache, handles, "")
+	chainDb, err := stack.OpenDatabase(name, cache, handles)
 	if err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
@@ -1306,27 +1322,4 @@ func MigrateFlags(action func(ctx *cli.Context) error) func(*cli.Context) error 
 		}
 		return action(ctx)
 	}
-}
-
-// find all filenames match the given pattern in the given root directory
-func WalkMatch(root, pattern string) ([]string, error) {
-	matches := []string{}
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if matched, err := filepath.Match(pattern, filepath.Base(path)); err != nil {
-			return err
-		} else if matched {
-			matches = append(matches, path)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return matches, nil
 }

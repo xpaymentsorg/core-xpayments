@@ -1,4 +1,4 @@
-// Copyright (c) 2018 XDPoSChain
+// Copyright (c) 2018 XPSchain
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
@@ -36,12 +36,10 @@ import (
 	"github.com/xpaymentsorg/go-xpayments/common/hexutil"
 	"github.com/xpaymentsorg/go-xpayments/consensus"
 	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS"
-	"github.com/xpaymentsorg/go-xpayments/consensus/XPoS/utils"
 	"github.com/xpaymentsorg/go-xpayments/contracts/blocksigner/contract"
 	randomizeContract "github.com/xpaymentsorg/go-xpayments/contracts/randomize/contract"
 	"github.com/xpaymentsorg/go-xpayments/core"
 	"github.com/xpaymentsorg/go-xpayments/core/state"
-	stateDatabase "github.com/xpaymentsorg/go-xpayments/core/state"
 	"github.com/xpaymentsorg/go-xpayments/core/types"
 	"github.com/xpaymentsorg/go-xpayments/ethdb"
 	"github.com/xpaymentsorg/go-xpayments/log"
@@ -61,26 +59,17 @@ type rewardLog struct {
 var TxSignMu sync.RWMutex
 
 // Send tx sign for block number to smart contract blockSigner.
-func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database, eb common.Address) error {
+func CreateTransactionSign(chainConfig *params.ChainConfig, pool *core.TxPool, manager *accounts.Manager, block *types.Block, chainDb ethdb.Database) error {
 	TxSignMu.Lock()
 	defer TxSignMu.Unlock()
 	if chainConfig.XPoS != nil {
 		// Find active account.
 		account := accounts.Account{}
 		var wallet accounts.Wallet
-		etherbaseAccount := accounts.Account{
-			Address: eb,
-			URL:     accounts.URL{},
-		}
 		if wallets := manager.Wallets(); len(wallets) > 0 {
-			if w, err := manager.Find(etherbaseAccount); err == nil && w != nil {
-				wallet = w
-				account = etherbaseAccount
-			} else {
-				wallet = wallets[0]
-				if accts := wallets[0].Accounts(); len(accts) > 0 {
-					account = accts[0]
-				}
+			wallet = wallets[0]
+			if accts := wallets[0].Accounts(); len(accts) > 0 {
+				account = accts[0]
 			}
 		}
 
@@ -209,8 +198,8 @@ func BuildTxOpeningRandomize(nonce uint64, randomizeAddr common.Address, randomi
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
-func GetSignersFromContract(state *stateDatabase.StateDB, block *types.Block) ([]common.Address, error) {
-	return stateDatabase.GetSigners(state, block), nil
+func GetSignersFromContract(state *state.StateDB, block *types.Block) ([]common.Address, error) {
+	return GetSigners(state, block), nil
 }
 
 // Get signers signed for blockNumber from blockSigner contract.
@@ -279,7 +268,7 @@ func BuildValidatorFromM2(listM2 []int64) []byte {
 	var validatorBytes []byte
 	for _, numberM2 := range listM2 {
 		// Convert number to byte.
-		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), utils.M2ByteLength)
+		m2Byte := common.LeftPadBytes([]byte(fmt.Sprintf("%d", numberM2)), XPoS.M2ByteLength)
 		validatorBytes = append(validatorBytes, m2Byte...)
 	}
 
@@ -293,7 +282,7 @@ func DecodeValidatorsHexData(validatorsStr string) ([]int64, error) {
 		return nil, err
 	}
 
-	return utils.ExtractValidatorsFromBytes(validatorsByte), nil
+	return XPoS.ExtractValidatorsFromBytes(validatorsByte), nil
 }
 
 // Decrypt randomize from secrets and opening.
@@ -331,16 +320,16 @@ func GetRewardForCheckpoint(c *XPoS.XPoS, chain consensus.ChainReader, header *t
 	for i := prevCheckpoint + (rCheckpoint * 2) - 1; i >= startBlockNumber; i-- {
 		header = chain.GetHeader(header.ParentHash, i)
 		mapBlkHash[i] = header.Hash()
-		signData, ok := c.GetCachedSigningTxs(header.Hash())
+		signData, ok := c.BlockSigners.Get(header.Hash())
 		if !ok {
 			log.Debug("Failed get from cached", "hash", header.Hash().String(), "number", i)
 			block := chain.GetBlock(header.Hash(), i)
 			txs := block.Transactions()
 			if !chain.Config().IsTIPSigning(header.Number) {
 				receipts := core.GetBlockReceipts(c.GetDb(), header.Hash(), i)
-				signData = c.CacheNoneTIPSigningTxs(header, txs, receipts)
+				signData = c.CacheData(header, txs, receipts)
 			} else {
-				signData = c.CacheSigningTxs(header.Hash(), txs)
+				signData = c.CacheSigner(header.Hash(), txs)
 			}
 		}
 		txs := signData.([]*types.Transaction)
@@ -351,7 +340,7 @@ func GetRewardForCheckpoint(c *XPoS.XPoS, chain consensus.ChainReader, header *t
 		}
 	}
 	header = chain.GetHeader(header.ParentHash, prevCheckpoint)
-	masternodes := utils.GetMasternodesFromCheckpointHeader(header)
+	masternodes := XPoS.GetMasternodesFromCheckpointHeader(header)
 
 	for i := startBlockNumber; i <= endBlockNumber; i++ {
 		if i%common.MergeSignRange == 0 || !chain.Config().IsTIP2019(big.NewInt(int64(i))) {
@@ -415,7 +404,7 @@ func CalculateRewardForSigner(chainReward *big.Int, signers map[common.Address]*
 
 // Get candidate owner by address.
 func GetCandidatesOwnerBySigner(state *state.StateDB, signerAddr common.Address) common.Address {
-	owner := stateDatabase.GetCandidateOwner(state, signerAddr)
+	owner := GetCandidateOwner(state, signerAddr)
 	return owner
 }
 
@@ -434,7 +423,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 	rewardMaster = new(big.Int).Div(rewardMaster, new(big.Int).SetInt64(100))
 	balances[owner] = rewardMaster
 	// Get voters for masternode.
-	voters := stateDatabase.GetVoters(state, masterAddr)
+	voters := GetVoters(state, masterAddr)
 
 	if len(voters) > 0 {
 		totalVoterReward := new(big.Int).Mul(totalReward, new(big.Int).SetUint64(common.RewardVoterPercent))
@@ -446,7 +435,7 @@ func GetRewardBalancesRate(foundationWalletAddr common.Address, state *state.Sta
 			if _, ok := voterCaps[voteAddr]; ok && common.TIP2019Block.Uint64() <= blockNumber {
 				continue
 			}
-			voterCap := stateDatabase.GetVoterCap(state, masterAddr, voteAddr)
+			voterCap := GetVoterCap(state, masterAddr, voteAddr)
 			totalCap.Add(totalCap, voterCap)
 			voterCaps[voteAddr] = voterCap
 		}
