@@ -1,17 +1,17 @@
-# Go xPayments
-Official Golang implementation of the xPayments protocol.
+# xPayments
+Official implementation of the xPayments protocol.
 
-It is a fork of Go Ethereum and Go Chain.<br>
-Official Ethereum Repository: https://github.com/ethereum/go-ethereum<br>
-Official GoChain Repository: https://github.com/gochain/gochain<br>
+It is a fork of Bitcoin.<br>
+Official Bitcoin Repository: https://github.com/bitcoin/bitcoin<br>
 
-![Forks](https://img.shields.io/github/forks/xpaymentsorg/go-xpayments?style=social)
-![Stars](https://img.shields.io/github/stars/xpaymentsorg/go-xpayments?style=social)
-![Languages](https://img.shields.io/github/languages/count/xpaymentsorg/go-xpayments) 
-![Issues](https://img.shields.io/github/issues/xpaymentsorg/go-xpayments) 
-![PRs](https://img.shields.io/github/issues-pr-raw/xpaymentsorg/go-xpayments) 
-![MIT License](https://img.shields.io/github/license/xpaymentsorg/go-xpayments)
-![contributors](https://img.shields.io/github/contributors-anon/xpaymentsorg/go-xpayments) 
-![size](https://img.shields.io/github/languages/code-size/xpaymentsorg/go-xpayments) 
-![lines](https://img.shields.io/tokei/lines/github/xpaymentsorg/go-xpayments)
+## Github
+![Forks](https://img.shields.io/github/forks/xpaymentsorg/xpayments?style=social)
+![Stars](https://img.shields.io/github/stars/xpaymentsorg/xpayments?style=social)
+<br>
+![MIT License](https://img.shields.io/github/license/xpaymentsorg/xpayments)
+![contributors](https://img.shields.io/github/contributors-anon/xpaymentsorg/xpayments) 
+![size](https://img.shields.io/github/languages/code-size/xpaymentsorg/xpayments) 
+![lines](https://img.shields.io/tokei/lines/github/xpaymentsorg/xpayments)
+
+## Social
 [![Twitter Follow](https://img.shields.io/twitter/follow/xPaymentsOrg.svg?style=social)](https://twitter.com/xpaymentsorg)
